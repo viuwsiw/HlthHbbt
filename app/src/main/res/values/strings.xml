@@ -1,0 +1,144 @@
+<resources>
+    <string name="app_name">HLTH HBTy</string>
+    <string name="action_settings">Настройки (indev)</string>
+    <!-- Strings used for fragments for navigation -->
+    <string name="first_fragment_label">Внимание!</string>
+    <string name="second_fragment_label">НЕ НАСТРОЕНО</string>
+    <string name="next">Далее</string>
+    <string name="previous">Назад</string>
+    <string name="nameUser">Имя</string>
+
+    <string name="start_popup">
+        Добро пожаловать! Просим вас сообщать о багах и возможных лагах на эл. почту\n
+        *нажмите на кнопку в правом-нижем углу*\n\n
+        Версия сборки: release 1.1\n\n
+       Changelogs:\n
+        - Обновлен раздел в главном меню приложения!\n
+        - Добавлены новые советы!\n
+        - Добавлена возможность при регистрации внести возраст.\n
+        - Добавлены плейлисты для быстрого доступа к музыке!\n
+        - Обновлено меню пользователя, добавлен интерфейс изменения данных о пользователе <font color="#FFDD00">(КОНЦЕПТ)</font>\n
+        - Возвращена поддержка актуальной версии Android 14!\n
+        - Внутренние изменения в коде, не влияющие на пользовательский опыт\n\n\n\n
+        Программа написана индивидуально студентом 3 курса ФНО ЦФ ФГБОУ "РГУП".\n
+        ДАННАЯ ВЕРСИЯ ПРИЛОЖЕНИЯ ТАКЖЕ ТРЕБУЕТ ДОРАБОТОК, МНОГИЕ АСПЕКТЫ ПРИЛОЖЕНИЯ ТРЕБУЮТ ДОПОЛНИТЕЛЬНОГО ВРЕМЕНИ ДЛЯ ДОРАБОТОК\n
+    </string>
+
+    <string name="tips1">
+1. Начинайте день с улыбки. Ничто не заряжает позитивом лучше.\n
+    </string>
+    <string name="tips2">
+2. По утрам принимайте контрастный душ – помогает проснуться не хуже, чем чашка крепкого кофе.\n
+    </string>
+    <string name="tips3">
+3. Забудьте про лифт! Поднимайтесь и спускайтесь сегодня пешком!\n
+    </string>
+    <string name="tips4">
+4. Научитесь планировать предстоящий день.\n
+    </string>
+    <string name="tips5">
+5. Устраивайте ежедневные прогулки на свежем воздухе.\n
+    </string>
+    <string name="tips6">
+6. Пейте достаточное количество чистой, негазированной воды: не менее 1500 мл в день. *Отслеживаете выпитую воду здесь!*\n
+    </string>
+    <string name="tips7">
+7. Проветривайте комнату перед сном. Спите в прохладе.\n
+    </string>
+    <string name="tips8">
+8. Вернувшись домой с работы, уделите себе 15 минут для релаксации под приятную музыку.\n
+    </string>
+    <string name="tips9">
+9. Побудьте неделю вегетарианцем. А вдруг вам понравится! Разгрузите ЖКТ, упростив ему работу и облегчив себе самочувствие! Доказано, что чем легче пища, тем быстрее и легче она будет усваиваться!\n
+    </string>
+    <string name="tips10">
+10. Ежедневно уделяйте чтению хотя бы 30 минут. Это здорово помогает даже при СДВГ и прочих псих. расстройствах научиться держать свой фокус!\n
+    </string>
+    <string name="tips11">
+11. Ежедневно употребляйте кисломолочные продукты: нежирный творог, йогурт без добавок, кефир.\n
+    </string>
+    <string name="tips12">
+12. Перейдите на зерновой хлеб!\n
+    </string>
+    <string name="tips13">
+13. Проводите выходные с пользой: выбирайтесь на природу, ездите на экскурсии, наслаждайтесь новыми пейзажами и общением с новыми людьми.\n
+    </string>
+    <string name="tips14">
+14. Высыпайтесь. Приучите себя ложиться и вставать в одно и то же время.\n
+    </string>
+    <string name="tips15">
+15. По утрам принимайте контрастный душ – помогает проснуться не хуже, чем чашка крепкого кофе!\n
+    </string>
+    <string name="tips16">
+16. Говорите людям комплименты, будьте доброжелательны! Таким образом вы можете поддерживать ментальное здоровье.\n
+    </string>
+    <string name="tips17">
+17. Изучите техники и займитесь йогой или дыхательными упражнениями!\n
+    </string>
+    <string name="tips18">
+18. Дофаминовое голодание - лучший способ разгрузить ЦНС и нейрорецепторы! Исключите источники быстрого дофамина и освободите место для новых полезных привычек, которые дают порционно дофамин!\n
+    </string>
+    <string name="tips19">
+19. Используйте это приложение для записи и отслеживание показателей вашего организма!\n
+    </string>
+    <string name="tips20">
+20. Прогулка на улице на час-полтора часа перед сном может облегчить и улучшить сон!\n
+    </string>
+    <string name="tips21">
+21. Слушайте спокойную музыку перед сном! Это поможет освободить "голову" от потока мыслей и поможет ускорить появление сна!\n
+    </string>
+    <string name="tips22">
+22. Исследуйте плейлисты, которые есть в рекомендациях!\n
+    </string>
+    <string name="tips23">
+23. Возможно, разработчик все таки добавит персонализированные советы...\n
+    </string>
+    <string name="tips24">
+24. Важно помнить о том, что засыпать нужно к 22:00-23:00 часам, поскольку именно в это время организм наиболее эффективно справляется со стрессом и избавляется от токсинов!\n
+    </string>
+    <string name="tips25">
+25. Если вы увидели этот совет, то это не было запланированным! Разработчик специально оставил 25-й tips для того, чтобы приложение не вылетало с ошибкой NullPointer!\n
+    </string>
+
+
+    <string name="title_activity_user_menu">Пользовательское меню</string>
+    <string name="navigation_drawer_open">НЕ НАСТРОЕНО</string>
+    <string name="navigation_drawer_close">НЕ НАСТРОЕНО</string>
+    <string name="nav_header_title">HTLH HBTy</string>
+    <string name="nav_header_subtitle">НЕ НАСТРОЕНО</string>
+    <string name="nav_header_desc">НЕ НАСТРОЕНО</string>
+
+    <string name="menu_transform">НЕ НАСТРОЕНО</string>
+    <string name="menu_reflow">НЕ НАСТРОЕНО</string>
+    <string name="menu_slideshow">НЕ НАСТРОЕНО</string>
+    <string name="menu_settings">НЕ НАСТРОЕНО</string>
+
+    <string name="fab_content_description">НЕ НАСТРОЕНО</string>
+    <string name="image_view_item_transform_content_description">НЕ НАСТРОЕНО
+    </string>
+    <string name="title_activity_user_interface">НЕ НАСТРОЕНО</string>
+    <string name="tab_text_1">НЕ НАСТРОЕНО</string>
+    <string name="tab_text_2">НЕ НАСТРОЕНО</string>
+    <string name="app_version">release 1.1</string>
+    <string name="title_activity_settings">Настройки HLTH HBTy</string>
+
+    <!-- Preference Titles -->
+    <string name="messages_header">Цвет фона</string>
+    <string name="sync_header">Синхронизация данных пользователя</string>
+
+    <!-- Messages Preferences -->
+    <string name="signature_title">НЕ НАСТРОЕНО</string>
+    <string name="reply_title">НЕ НАСТРОЕНО</string>
+
+    <!-- Sync Preferences -->
+    <string name="sync_title">НЕ НАСТРОЕНО</string>
+    <string name="attachment_title">НЕ НАСТРОЕНО</string>
+    <string name="attachment_summary_on">НЕ НАСТРОЕНО
+    </string>
+    <string name="attachment_summary_off">НЕ НАСТРОЕНО</string>
+    <string name="title_activity_menu_app">Меню</string>
+    <string name="title_activity_second_appp">Главное</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="title_activity_edit_profile">EditProfile</string>
+</resources>
