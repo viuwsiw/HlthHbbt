@@ -141,6 +141,9 @@ fun ProfileScreen(
             }
         }
         item {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { com.tshk.hlthhbbty.ui.glass.BetaBadge() }
+        }
+        item {
             Text(
                 "HLTH HBTy ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.labelMedium,

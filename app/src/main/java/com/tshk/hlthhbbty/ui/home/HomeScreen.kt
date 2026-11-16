@@ -87,6 +87,7 @@ fun HomeScreen(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
+                    com.tshk.hlthhbbty.ui.glass.BetaBadge(Modifier.padding(bottom = 6.dp))
                     Text(greeting() + ",", style = MaterialTheme.typography.titleMedium, color = p.textSecondary)
                     Text(
                         user.displayName,
