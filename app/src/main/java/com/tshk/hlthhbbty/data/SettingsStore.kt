@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-enum class ThemeMode(val title: String) { SYSTEM("Системная"), LIGHT("Светлая"), DARK("Тёмная") }
+enum class ThemeMode(val title: String) { SYSTEM("Авто"), LIGHT("Светлая"), DARK("Тёмная"), BLACK("Чёрная") }
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -24,6 +24,7 @@ data class AppSettings(
     val waterToHour: Int = 21,
     val healthConnect: Boolean = false,
     val autoUpdate: Boolean = true,
+    val bugButton: Boolean = true,
 )
 
 class SettingsStore(private val context: Context) {
@@ -36,6 +37,7 @@ class SettingsStore(private val context: Context) {
         val to = intPreferencesKey("water_to")
         val health = booleanPreferencesKey("health_connect")
         val autoUpdate = booleanPreferencesKey("auto_update")
+        val bugButton = booleanPreferencesKey("bug_button")
         val seen = stringSetPreferencesKey("seen_achievements")
     }
 
@@ -60,6 +62,7 @@ class SettingsStore(private val context: Context) {
             prefs[K.to] = s.waterToHour
             prefs[K.health] = s.healthConnect
             prefs[K.autoUpdate] = s.autoUpdate
+            prefs[K.bugButton] = s.bugButton
         }
     }
 
@@ -72,5 +75,6 @@ class SettingsStore(private val context: Context) {
         waterToHour = this[K.to] ?: 21,
         healthConnect = this[K.health] ?: false,
         autoUpdate = this[K.autoUpdate] ?: true,
+        bugButton = this[K.bugButton] ?: true,
     )
 }

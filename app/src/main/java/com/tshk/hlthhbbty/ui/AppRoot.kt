@@ -81,6 +81,10 @@ fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory
             }
         }
         UpdateHost()
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val settings by (context.applicationContext as com.tshk.hlthhbbty.HlthApp).container.settings.settings
+            .collectAsStateWithLifecycle(com.tshk.hlthhbbty.data.AppSettings())
+        if (settings.bugButton) BugTrackerButton()
     }
 }
 

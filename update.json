@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "2.5",
+  "versionCode": 10,
+  "versionName": "2.6",
   "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk",
-  "size": 23054464,
-  "changelog": "• Плейлисты Spotify играют прямо в приложении: на главной и в таймере фокуса\n• Мини-плеер на главной и в фокусе\n• Понятные сообщения об ошибках Spotify вместо «403»"
+  "size": 23087232,
+  "changelog": "• Полностью чёрная тема (Настройки → Оформление → Чёрная)\n• Кнопка багтрекера 🐞 сбоку экрана: отчёт в GitHub Issues или на почту"
 }

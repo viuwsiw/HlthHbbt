@@ -203,6 +203,17 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
         }
         VSpace(16.dp)
 
+        GlassCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("🐞 Кнопка багтрекера", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text("Маленькая кнопка сбоку экрана для отчёта об ошибке", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(s.bugButton, vm::setBugButton, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+        }
+        VSpace(16.dp)
+
         val upd by vm.updater.state.collectAsStateWithLifecycle()
         GlassCard(Modifier.fillMaxWidth()) {
             SectionTitle("Обновления") {

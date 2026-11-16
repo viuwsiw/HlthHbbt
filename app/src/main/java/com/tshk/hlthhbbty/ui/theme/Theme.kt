@@ -79,6 +79,22 @@ val DarkPalette = LiquidPalette(
     waterDeep = Color(0xFF3B82F6),
 )
 
+/** Полностью чёрная тема (AMOLED): чистый чёрный фон, едва заметное свечение. */
+val BlackPalette = DarkPalette.copy(
+    base = Color.Black,
+    blobs = listOf(
+        Color(0xFF0E4D36), Color(0xFF0A3F45), Color(0xFF2E3D0C),
+        Color(0xFF15264F), Color(0xFF2B1B52),
+    ),
+    glassTint = Color.White.copy(alpha = 0.06f),
+    glassTintStrong = Color(0xFF0A0A0A).copy(alpha = 0.92f),
+    rimBright = Color.White.copy(alpha = 0.30f),
+    rimFaint = Color.White.copy(alpha = 0.04f),
+    sheen = Color.White.copy(alpha = 0.06f),
+    textPrimary = Color(0xFFF2F2F2),
+    textSecondary = Color(0xFF9A9A9A),
+)
+
 /** Цвета привычек. */
 val HabitColors = listOf(
     Color(0xFF22C55E), Color(0xFF06B6D4), Color(0xFFF59E0B), Color(0xFFEF4444),
@@ -115,11 +131,11 @@ private val AppTypography = Typography().let { t ->
 }
 
 @Composable
-fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, content: @Composable () -> Unit) {
+fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, black: Boolean = false, content: @Composable () -> Unit) {
     val accent = AccentOptions.getOrElse(accentIndex) { AccentOptions[0] }
     val (a1, a2) = if (dark) accent.dark else accent.light
-    val p = (if (dark) DarkPalette else LightPalette).copy(accent = a1, accentSecondary = a2)
-    val scheme = if (dark) {
+    val p = (if (black) BlackPalette else if (dark) DarkPalette else LightPalette).copy(accent = a1, accentSecondary = a2)
+    val scheme = if (dark || black) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.onAccent, secondary = p.accentSecondary,
             background = p.base, surface = p.base, onBackground = p.textPrimary,

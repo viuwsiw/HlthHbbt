@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
             val dark = when (settings.themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
+                ThemeMode.DARK, ThemeMode.BLACK -> true
             }
             DisposableEffect(dark) {
                 val transparent = android.graphics.Color.TRANSPARENT
@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            HlthTheme(dark, settings.accentIndex) { AppRoot() }
+            HlthTheme(dark, settings.accentIndex, black = settings.themeMode == ThemeMode.BLACK) { AppRoot() }
         }
     }
 
