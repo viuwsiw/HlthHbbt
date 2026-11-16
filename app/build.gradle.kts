@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "2.6"
+        versionCode = 11
+        versionName = "2.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${project.findProperty("spotify.clientId") ?: ""}\"")

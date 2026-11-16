@@ -43,7 +43,7 @@ class UpdateRepository(private val context: Context) {
     }
 
     private fun fromRelease(): UpdateInfo? {
-        val json = JSONObject(httpGet("https://api.github.com/repos/$owner/$repo/releases/latest", github = true) ?: return null)
+        val json = JSONObject(httpGet("https://api.github.com/repos/$owner/$repo/releases/latest", accept = "application/vnd.github+json") ?: return null)
         val assets = json.optJSONArray("assets") ?: return null
         val apk = (0 until assets.length()).map { assets.getJSONObject(it) }
             .firstOrNull { it.optString("name").endsWith(".apk") } ?: return null
@@ -57,7 +57,11 @@ class UpdateRepository(private val context: Context) {
     }
 
     private fun fromManifest(): UpdateInfo? {
-        val json = JSONObject(httpGet("https://raw.githubusercontent.com/$owner/$repo/HEAD/update.json") ?: return null)
+        // API GitHub отдаёт свежий файл; raw-ссылка кэшируется CDN до 5 минут — она запасная.
+        val text = runCatching {
+            httpGet("https://api.github.com/repos/$owner/$repo/contents/update.json", accept = "application/vnd.github.raw+json")
+        }.getOrNull() ?: httpGet("https://raw.githubusercontent.com/$owner/$repo/HEAD/update.json?t=${System.currentTimeMillis()}")
+        val json = JSONObject(text ?: return null)
         return UpdateInfo(
             versionName = json.getString("versionName"),
             versionCode = json.optInt("versionCode").takeIf { it > 0 },
@@ -127,13 +131,14 @@ class UpdateRepository(private val context: Context) {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
-    private fun httpGet(url: String, github: Boolean = false): String? {
+    private fun httpGet(url: String, accept: String? = null): String? {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
             setRequestProperty("User-Agent", "HLTH-HBTy-Android")
-            if (github) setRequestProperty("Accept", "application/vnd.github+json")
+            if (accept != null) setRequestProperty("Accept", accept)
             setRequestProperty("Cache-Control", "no-cache")
+            useCaches = false
         }
         return try {
             if (conn.responseCode == 404) null

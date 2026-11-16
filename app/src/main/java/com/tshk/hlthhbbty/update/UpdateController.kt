@@ -28,9 +28,17 @@ class UpdateController(private val repo: UpdateRepository, private val scope: Co
     val dismissed: StateFlow<String?> = _dismissed.asStateFlow()
 
     private var job: Job? = null
+    private var lastCheck = 0L
+
+    /** Тихая проверка при возвращении в приложение, не чаще раза в 15 минут. */
+    fun checkIfStale() {
+        if (System.currentTimeMillis() - lastCheck < 15 * 60_000) return
+        check(silent = true)
+    }
 
     fun check(silent: Boolean = false) {
         if (_state.value is UpdateState.Checking || _state.value is UpdateState.Downloading) return
+        lastCheck = System.currentTimeMillis()
         job = scope.launch {
             if (!silent) _state.value = UpdateState.Checking
             repo.check()

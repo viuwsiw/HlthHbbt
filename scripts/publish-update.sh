@@ -18,7 +18,7 @@ code, name, size, notes = sys.argv[1:5]
 json.dump({
     "versionCode": int(code),
     "versionName": name,
-    "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk",
+    "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=" + code,
     "size": int(size),
     "changelog": notes.replace("\\n", "\n"),
 }, open("update.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)

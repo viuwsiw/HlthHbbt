@@ -1,7 +1,7 @@
 {
-  "versionCode": 10,
-  "versionName": "2.6",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk",
+  "versionCode": 11,
+  "versionName": "2.7",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=11",
   "size": 23087232,
-  "changelog": "• Полностью чёрная тема (Настройки → Оформление → Чёрная)\n• Кнопка багтрекера 🐞 сбоку экрана: отчёт в GitHub Issues или на почту"
+  "changelog": "• Обновления находятся сразу после публикации (без задержки кэша GitHub)\n• Проверка обновлений при каждом возвращении в приложение"
 }

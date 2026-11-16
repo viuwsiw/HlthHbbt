@@ -27,6 +27,7 @@ import com.tshk.hlthhbbty.ui.glass.GlassDialog
 import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /** Проверка при запуске и стеклянное окно обновления поверх всего приложения. */
 @Composable
@@ -38,8 +39,10 @@ fun UpdateHost() {
     val dismissed by updater.dismissed.collectAsStateWithLifecycle()
     val p = Liquid.palette
 
-    LaunchedEffect(Unit) {
-        if (c.settings.settings.first().autoUpdate) updater.check(silent = true)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        scope.launch { if (c.settings.settings.first().autoUpdate) updater.checkIfStale() }
+        onPauseOrDispose {}
     }
 
     val install: (java.io.File) -> Unit = { file ->
