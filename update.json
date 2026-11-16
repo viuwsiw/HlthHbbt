@@ -1,7 +1,7 @@
 {
-  "versionCode": 25,
-  "versionName": "1.0.2.2",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/4067dfa35c203e5741723f07fffa4cd81255be61/dist/HLTH-HBTy-25.apk",
-  "size": 3673791,
-  "changelog": "• При регистрации и входе нужно выдать все обязательные разрешения\n• Разрешение на установку обновлений — автообновление работает без ошибок\n• Автопроверка обновлений включается при входе"
+  "versionCode": 26,
+  "versionName": "1.0.2.3",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/a89be27f5c7b1c779d4fd7e87ee8104bd44c0db5/dist/HLTH-HBTy-26.apk",
+  "size": 3678313,
+  "changelog": "• Новый виджет «Быстрые действия»: вода, фокус, прогулка, привычки\n• Виджет «Привычки» в новом стиле\n• Виджеты — полупрозрачное стекло поверх обоев в тонах вашей темы"
 }
