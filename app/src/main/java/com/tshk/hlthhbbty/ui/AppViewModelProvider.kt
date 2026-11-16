@@ -34,6 +34,7 @@ object AppViewModelProvider {
         initializer { FocusViewModel(container(), createSavedStateHandle()) }
         initializer { AchievementsViewModel(container()) }
         initializer { SettingsViewModel(container()) }
+        initializer { com.tshk.hlthhbbty.ui.integrations.SpotifyViewModel(container(), createSavedStateHandle()) }
     }
 
     private fun CreationExtras.container(): AppContainer = (this[APPLICATION_KEY] as HlthApp).container

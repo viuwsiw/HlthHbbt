@@ -54,6 +54,7 @@ class AppContainer(private val context: Context) {
     val backup = BackupRepository(context, db)
     val health = HealthRepository(context, habits)
     val reminders = ReminderScheduler(context)
+    val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
 
     fun start() {
         habits.listener = object : HabitChangeListener {

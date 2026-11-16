@@ -1,6 +1,10 @@
 package com.tshk.hlthhbbty
 
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -17,6 +21,7 @@ import com.tshk.hlthhbbty.ui.theme.HlthTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleSpotifyRedirect(intent)
         val settingsFlow = (application as HlthApp).container.settings.settings
         setContent {
             val settings by settingsFlow.collectAsStateWithLifecycle(AppSettings())
@@ -34,6 +39,24 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             HlthTheme(dark, settings.accentIndex) { AppRoot() }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleSpotifyRedirect(intent)
+    }
+
+    /** Возврат со страницы входа Spotify: hlthhbbty://spotify-callback?code=… */
+    private fun handleSpotifyRedirect(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != "hlthhbbty" || uri.host != "spotify-callback") return
+        intent.data = null
+        val c = (application as HlthApp).container
+        lifecycleScope.launch {
+            c.spotify.handleRedirect(uri)
+                .onSuccess { Toast.makeText(this@MainActivity, "Spotify подключён", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(this@MainActivity, "Spotify: ${it.message}", Toast.LENGTH_LONG).show() }
         }
     }
 }

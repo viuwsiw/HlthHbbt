@@ -92,6 +92,8 @@ private object Routes {
     const val CHANGE_PASSWORD = "profile/password"
     const val INTEGRATIONS = "integrations"
     const val ACHIEVEMENTS = "achievements"
+    const val PLAYER = "spotify/player"
+    const val SPOTIFY_PLAYLIST = "spotify/playlist/{playlistId}"
     const val SETTINGS = "settings"
     const val HABIT_EDIT = "habit/edit?id={id}&kind={kind}"
     const val FOCUS = "focus/{id}"
@@ -164,7 +166,16 @@ private fun MainScaffold() {
             composable(Routes.EDIT_PROFILE) { EditProfileScreen(onboarding = false, onDone = { nav.popBackStack() }) }
             composable(Routes.CHANGE_PASSWORD) { ChangePasswordScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.INTEGRATIONS) {
-                IntegrationsScreen(onBack = { nav.popBackStack() }, onSettings = { nav.navigate(Routes.SETTINGS) })
+                IntegrationsScreen(
+                    onBack = { nav.popBackStack() },
+                    onSettings = { nav.navigate(Routes.SETTINGS) },
+                    onPlayer = { nav.navigate(Routes.PLAYER) },
+                    onPlaylist = { nav.navigate("spotify/playlist/$it") },
+                )
+            }
+            composable(Routes.PLAYER) { com.tshk.hlthhbbty.ui.integrations.PlayerScreen(onBack = { nav.popBackStack() }) }
+            composable(Routes.SPOTIFY_PLAYLIST, arguments = listOf(navArgument("playlistId") { type = NavType.StringType })) {
+                com.tshk.hlthhbbty.ui.integrations.SpotifyPlaylistScreen(onBack = { nav.popBackStack() }, onPlayer = { nav.navigate(Routes.PLAYER) })
             }
             composable(Routes.ACHIEVEMENTS) { AchievementsScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.SETTINGS) { SettingsScreen(onBack = { nav.popBackStack() }) }

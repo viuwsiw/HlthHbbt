@@ -13,10 +13,23 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.1"
+        versionCode = 6
+        versionName = "2.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+        buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${project.findProperty("spotify.clientId") ?: ""}\"")
+        manifestPlaceholders["redirectScheme"] = "hlthhbbty"
+    }
+
+    signingConfigs {
+        // Общий debug-ключ в репозитории: сборки из любой среды ставятся поверх друг друга,
+        // а отпечаток совпадает с зарегистрированным в Spotify Dashboard.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
