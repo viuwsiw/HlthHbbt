@@ -41,6 +41,7 @@ class HlthApp : Application() {
 
 /** Простой DI-контейнер: всё создаётся один раз на процесс. */
 class AppContainer(private val context: Context) {
+    val appContext: Context get() = context
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val db = AppDatabase.build(context)
 

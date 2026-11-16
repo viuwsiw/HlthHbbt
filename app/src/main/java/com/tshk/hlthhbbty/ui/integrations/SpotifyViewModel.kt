@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -41,6 +44,23 @@ class SpotifyViewModel(private val c: AppContainer, handle: SavedStateHandle) : 
     val nowPlaying: StateFlow<NowPlaying?> = combine(media.state, repo.playback) { m, pb ->
         m?.toNowPlaying() ?: pb?.toNowPlaying()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(2_000), null)
+
+    /** Имя из профиля приложения — для заявки на доступ к Spotify. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val profileName: StateFlow<String> = c.auth.currentUserId
+        .flatMapLatest { id -> if (id == null) flowOf(null) else c.users.observe(id) }
+        .map { it?.displayName.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    private val accessPrefs = c.appContext.getSharedPreferences("spotify_access", android.content.Context.MODE_PRIVATE)
+    private val _requestedEmail = MutableStateFlow(accessPrefs.getString("requested_email", null))
+    /** Email, на который уже отправлена заявка (null — не отправляли). */
+    val requestedEmail: StateFlow<String?> = _requestedEmail.asStateFlow()
+
+    fun markAccessRequested(email: String) {
+        accessPrefs.edit().putString("requested_email", email).apply()
+        _requestedEmail.value = email
+    }
 
     fun refreshMedia() = media.refresh()
     fun mediaAccessIntent() = media.accessSettingsIntent()

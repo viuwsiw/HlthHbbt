@@ -94,7 +94,9 @@ fun IntegrationsScreen(
                     Text("Разработчику нужно указать Client ID из Spotify Dashboard.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                 }
             }
-            !loggedIn -> item {
+            !loggedIn -> {
+                item { SpotifyAccessNotice(vm) }
+                item {
                 GlassCard(Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🎧", style = MaterialTheme.typography.headlineMedium)
@@ -106,6 +108,7 @@ fun IntegrationsScreen(
                     }
                     VSpace(14.dp)
                     GlassButton("Войти через Spotify", vm::login, Modifier.fillMaxWidth())
+                }
                 }
             }
             else -> {
