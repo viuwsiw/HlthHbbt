@@ -19,8 +19,17 @@ data class MessageAction(val label: String, val url: String)
  * Сообщение приложения в панель уведомлений: полный текст (раскрывается), заголовок,
  * необязательная кнопка-ссылка. Без разрешения на уведомления — длинный Toast.
  */
+private val recentMessages = HashMap<String, Long>()
+
 @SuppressLint("MissingPermission")
 fun Context.showMessage(title: String, text: String, action: MessageAction? = null) {
+    // Одно и то же сообщение не чаще раза в 2 минуты — никакого спама.
+    val key = title + text
+    val now = System.currentTimeMillis()
+    synchronized(recentMessages) {
+        if ((recentMessages[key] ?: 0L) > now - 120_000) return
+        recentMessages[key] = now
+    }
     if (!Notifications.canPost(this)) {
         Toast.makeText(this, "$title: $text", Toast.LENGTH_LONG).show()
         return

@@ -36,6 +36,8 @@ class SpotifyViewModel(private val c: AppContainer, handle: SavedStateHandle) : 
     val user = repo.user
     val playlists = repo.playlists
     val playback = repo.playback
+    val profileError = repo.profileError
+    fun retryProfile() = viewModelScope.launch { repo.loadProfile(force = true) }
 
     // Универсальный системный плеер
     private val media = c.media
@@ -78,13 +80,15 @@ class SpotifyViewModel(private val c: AppContainer, handle: SavedStateHandle) : 
             if (repo.user.value == null) repo.loadProfile()
             playlistId?.let { _tracks.value = repo.tracks(it) }
         }
-        viewModelScope.launch {
-            repo.lastError.collect { e -> if (e != null) { _events.send(SpotifyEvent.Message(e)); repo.consumeError() } }
-        }
     }
 
     fun login() = viewModelScope.launch { _events.send(SpotifyEvent.OpenUrl(repo.loginUri())) }
     fun logout() = viewModelScope.launch { repo.logout() }
+    /** Выйти и сразу войти заново (последовательно, чтобы не потерять PKCE-данные). */
+    fun relogin() = viewModelScope.launch {
+        repo.logout()
+        _events.send(SpotifyEvent.OpenUrl(repo.loginUri()))
+    }
 
     /** Запуск плейлиста: через API, а если нельзя (нет Premium и т.п.) — открываем в Spotify. */
     fun play(contextUri: String? = null, trackUri: String? = null) = viewModelScope.launch {

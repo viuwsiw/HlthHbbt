@@ -61,6 +61,7 @@ fun IntegrationsScreen(
     val user by vm.user.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val profileError by vm.profileError.collectAsStateWithLifecycle()
     val mediaAccess by vm.mediaAccess.collectAsStateWithLifecycle()
     SpotifyEvents(vm)
 
@@ -112,6 +113,25 @@ fun IntegrationsScreen(
                 }
             }
             else -> {
+                profileError?.let { err ->
+                    item {
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Text("Spotify не отдал данные аккаунта", style = MaterialTheme.typography.titleSmall, color = p.danger)
+                            VSpace(6.dp)
+                            Text(err, style = MaterialTheme.typography.bodySmall, color = p.textPrimary)
+                            VSpace(8.dp)
+                            Text(
+                                "Если вы только что добавили email в User Management — выйдите из Spotify и войдите заново. Email должен совпадать с почтой аккаунта Spotify.",
+                                style = MaterialTheme.typography.labelSmall, color = p.textSecondary,
+                            )
+                            VSpace(12.dp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                GlassButton("Повторить", vm::retryProfile, Modifier.weight(1f), style = GlassButtonStyle.Secondary)
+                                GlassButton("Войти заново", vm::relogin, Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
                 item { SectionTitle("Для привычек") }
                 items(Integrations.playlists.filter { it.service == MusicService.SPOTIFY }, key = { it.url }) { pl ->
                     val id = pl.url.substringAfterLast("/").substringBefore("?")

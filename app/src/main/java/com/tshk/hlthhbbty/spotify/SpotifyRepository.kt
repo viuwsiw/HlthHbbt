@@ -37,6 +37,11 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
     private val _playlists = MutableStateFlow<List<SpotifyPlaylist>>(emptyList())
     val playlists: StateFlow<List<SpotifyPlaylist>> = _playlists.asStateFlow()
 
+    private val _profileError = MutableStateFlow<String?>(null)
+    /** Ошибка загрузки профиля — показывается в разделе Spotify, без уведомлений. */
+    val profileError: StateFlow<String?> = _profileError.asStateFlow()
+    private var lastProfileLoad = 0L
+
     private val refreshTick = MutableStateFlow(0)
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
@@ -57,12 +62,23 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
 
     suspend fun loginUri(): Uri = auth.buildLoginUri()
 
-    suspend fun handleRedirect(uri: Uri): Result<Unit> = auth.handleRedirect(uri).onSuccess { loadProfile() }
+    suspend fun handleRedirect(uri: Uri): Result<Unit> = auth.handleRedirect(uri).onSuccess { loadProfile(force = true) }
 
-    suspend fun loadProfile() {
+    /** Загружает профиль и плейлисты. Без force — не чаще раза в минуту и только если ещё не загружено. */
+    suspend fun loadProfile(force: Boolean = false) {
+        if (!force && (_user.value != null || System.currentTimeMillis() - lastProfileLoad < 60_000)) return
+        lastProfileLoad = System.currentTimeMillis()
         if (!isLoggedIn.value && auth.accessToken() == null) return
-        runCatching { _user.value = api.me() }.onFailure { onError(it) }
-        runCatching { _playlists.value = api.myPlaylists() }
+        runCatching { api.me() }
+            .onSuccess {
+                _user.value = it
+                _profileError.value = null
+                runCatching { _playlists.value = api.myPlaylists() }
+            }
+            .onFailure {
+                if (it is SpotifyException.Unauthorized) _user.value = null
+                _profileError.value = it.message
+            }
     }
 
     suspend fun tracks(playlistId: String): List<SpotifyTrack> = runCatching { api.playlistTracks(playlistId) }.getOrElse { emptyList() }
@@ -126,5 +142,7 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
         auth.logout()
         _user.value = null
         _playlists.value = emptyList()
+        _profileError.value = null
+        lastProfileLoad = 0L
     }
 }

@@ -39,7 +39,7 @@ sealed class SpotifyException(message: String) : Exception(message) {
     class NoActiveDevice : SpotifyException("Нет активного устройства")
     class PremiumRequired : SpotifyException("Для управления воспроизведением нужен Spotify Premium")
     class Unauthorized : SpotifyException("Нужно войти в Spotify заново")
-    class NotRegistered : SpotifyException("Аккаунт Spotify не добавлен в приложение: добавьте его email в Spotify Dashboard → User Management")
+    class NotRegistered(raw: String) : SpotifyException("Spotify не пускает этот аккаунт: его нет в User Management приложения (или нужен повторный вход). Ответ Spotify: «$raw»")
     class Http(code: Int, msg: String) : SpotifyException("Spotify ($code): $msg")
 }
 
@@ -149,7 +149,7 @@ private fun forbidden(text: String): SpotifyException {
     return when {
         reason == "PREMIUM_REQUIRED" || msg.contains("premium", true) -> SpotifyException.PremiumRequired()
         msg.contains("not be registered", true) || msg.contains("developer.spotify.com", true) ->
-            SpotifyException.NotRegistered()
+            SpotifyException.NotRegistered(msg)
         msg.contains("Restriction violated", true) || reason == "UNKNOWN" ->
             SpotifyException.Http(403, "Spotify не разрешил это действие (${msg.ifBlank { "ограничение" }})")
         else -> SpotifyException.Http(403, msg.ifBlank { "доступ запрещён" })
