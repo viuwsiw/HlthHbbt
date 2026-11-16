@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +82,9 @@ fun AuthScreen(vm: AuthViewModel = viewModel(factory = AppViewModelProvider.Fact
                 textAlign = TextAlign.Center,
             )
             VSpace(28.dp)
+            var permsOk by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            PermissionsGate { permsOk = it }
+            VSpace(16.dp)
             GlassCard(Modifier.fillMaxWidth().animateContentSize()) {
                 GlassSegmented(
                     options = listOf("Вход", "Регистрация"),
@@ -126,8 +130,16 @@ fun AuthScreen(vm: AuthViewModel = viewModel(factory = AppViewModelProvider.Fact
                     text = if (s.isRegister) "Создать аккаунт" else "Войти",
                     onClick = submit,
                     loading = s.loading,
+                    enabled = permsOk,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (!permsOk) {
+                    Text(
+                        "Сначала выдайте все обязательные разрешения выше",
+                        style = MaterialTheme.typography.labelMedium, color = p.textSecondary,
+                        modifier = Modifier.padding(top = 8.dp).fillMaxWidth(), textAlign = TextAlign.Center,
+                    )
+                }
             }
             VSpace(16.dp)
             Text(

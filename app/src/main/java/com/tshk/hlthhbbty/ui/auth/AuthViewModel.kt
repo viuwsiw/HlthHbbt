@@ -56,7 +56,10 @@ class AuthViewModel(private val c: AppContainer) : ViewModel() {
             else c.auth.login(s.username, s.password)
             _state.update {
                 when (result) {
-                    is AuthResult.Success -> AuthUiState()
+                    is AuthResult.Success -> {
+                        viewModelScope.launch { c.settings.update { st -> st.copy(autoUpdate = true) } }
+                        AuthUiState()
+                    }
                     is AuthResult.Error -> it.copy(loading = false, error = result.message)
                 }
             }
