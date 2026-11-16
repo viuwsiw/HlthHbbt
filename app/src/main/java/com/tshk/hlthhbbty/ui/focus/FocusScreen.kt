@@ -5,6 +5,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,7 +51,7 @@ import com.tshk.hlthhbbty.ui.home.PlaylistTile
 import com.tshk.hlthhbbty.ui.theme.Liquid
 
 @Composable
-fun FocusScreen(onBack: () -> Unit, vm: FocusViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
+fun FocusScreen(onBack: () -> Unit, onIntegrations: () -> Unit, onPlayer: () -> Unit, vm: FocusViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val s by vm.state.collectAsStateWithLifecycle()
     val p = Liquid.palette
     val context = LocalContext.current
@@ -71,7 +72,7 @@ fun FocusScreen(onBack: () -> Unit, vm: FocusViewModel = viewModel(factory = App
     val sec = (s.remainingMs + 999) / 1000
 
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp),
+        Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.padding(top = 12.dp)) { ScreenHeader("Фокус", onBack, subtitle = habit?.let { "${it.emoji} ${it.title}" }) }
@@ -110,10 +111,6 @@ fun FocusScreen(onBack: () -> Unit, vm: FocusViewModel = viewModel(factory = App
             }
         }
         VSpace(20.dp)
-        SectionTitle("Музыка для концентрации")
-        VSpace(10.dp)
-        LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(Integrations.playlists) { PlaylistTile(it) }
-        }
+        com.tshk.hlthhbbty.ui.integrations.MusicSection(onIntegrations, onPlayer, title = "Музыка для концентрации")
     }
 }

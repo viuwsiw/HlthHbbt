@@ -143,6 +143,7 @@ private fun MainScaffold() {
                     onOpenHabits = { nav.switchTab(Routes.HABITS) },
                     onOpenIntegrations = { nav.navigate(Routes.INTEGRATIONS) },
                     onFocus = { nav.navigate(Routes.focus(it.id)) },
+                    onOpenPlayer = { nav.navigate(Routes.PLAYER) },
                 )
             }
             composable(Routes.HABITS) {
@@ -188,7 +189,11 @@ private fun MainScaffold() {
                 ),
             ) { HabitEditorScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.FOCUS, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
-                FocusScreen(onBack = { nav.popBackStack() })
+                FocusScreen(
+                    onBack = { nav.popBackStack() },
+                    onIntegrations = { nav.navigate(Routes.INTEGRATIONS) },
+                    onPlayer = { nav.navigate(Routes.PLAYER) },
+                )
             }
         }
 

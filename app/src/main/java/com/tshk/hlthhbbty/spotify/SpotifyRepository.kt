@@ -79,7 +79,6 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
             else runCatching { api.play(contextUri, trackUri, device.id); PlayResult.Ok }
                 .getOrElse { PlayResult.Error(it.message ?: "Ошибка") }
         } catch (e: Exception) {
-            onError(e)
             PlayResult.Error(e.message ?: "Ошибка")
         }
         refreshSoon()
@@ -103,7 +102,6 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
         } catch (e: SpotifyException.NoActiveDevice) {
             PlayResult.OpenSpotify
         } catch (e: Exception) {
-            onError(e)
             PlayResult.Error(e.message ?: "Ошибка")
         }
         refreshSoon()

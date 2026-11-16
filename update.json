@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "2.4",
+  "versionCode": 9,
+  "versionName": "2.5",
   "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk",
   "size": 23054464,
-  "changelog": "• Spotify подключён: вход, плейлисты и плеер в «Интеграциях»"
+  "changelog": "• Плейлисты Spotify играют прямо в приложении: на главной и в таймере фокуса\n• Мини-плеер на главной и в фокусе\n• Понятные сообщения об ошибках Spotify вместо «403»"
 }

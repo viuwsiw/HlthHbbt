@@ -67,6 +67,7 @@ fun HomeScreen(
     onOpenHabits: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onFocus: (com.tshk.hlthhbbty.data.db.HabitEntity) -> Unit,
+    onOpenPlayer: () -> Unit,
     vm: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -158,24 +159,7 @@ fun HomeScreen(
             }
         }
 
-        item {
-            SectionTitle("Музыка для привычек", Modifier.padding(top = 4.dp)) {
-                Text(
-                    "Все",
-                    color = p.accent,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onOpenIntegrations)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            }
-        }
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(Integrations.playlists) { PlaylistTile(it) }
-            }
-        }
+        item { com.tshk.hlthhbbty.ui.integrations.MusicSection(onOpenIntegrations, onOpenPlayer) }
     }
 }
 

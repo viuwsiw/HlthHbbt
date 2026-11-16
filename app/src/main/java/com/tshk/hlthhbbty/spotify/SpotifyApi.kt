@@ -39,7 +39,8 @@ sealed class SpotifyException(message: String) : Exception(message) {
     class NoActiveDevice : SpotifyException("Нет активного устройства")
     class PremiumRequired : SpotifyException("Для управления воспроизведением нужен Spotify Premium")
     class Unauthorized : SpotifyException("Нужно войти в Spotify заново")
-    class Http(code: Int, msg: String) : SpotifyException("Spotify: $code $msg")
+    class NotRegistered : SpotifyException("Аккаунт Spotify не добавлен в приложение: добавьте его email в Spotify Dashboard → User Management")
+    class Http(code: Int, msg: String) : SpotifyException("Spotify ($code): $msg")
 }
 
 /** Минимальный клиент Spotify Web API на HttpURLConnection. */
@@ -131,9 +132,27 @@ class SpotifyApi(private val auth: SpotifyAuth) {
             code == 401 -> throw SpotifyException.Unauthorized()
             code == 404 && text.contains("NO_ACTIVE_DEVICE") -> throw SpotifyException.NoActiveDevice()
             code == 404 && path.startsWith("/me/player") -> throw SpotifyException.NoActiveDevice()
-            code == 403 && text.contains("PREMIUM", ignoreCase = true) -> throw SpotifyException.PremiumRequired()
-            else -> throw SpotifyException.Http(code, runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull().orEmpty())
+            code == 403 -> throw forbidden(text)
+            else -> throw SpotifyException.Http(code, errorMessage(text))
         }
+    }
+}
+
+/** Текст ошибки Spotify: JSON {"error":{"message","reason"}} или обычный текст. */
+private fun errorMessage(text: String): String =
+    runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull()
+        ?.takeIf { it.isNotBlank() } ?: text.trim().take(200)
+
+private fun forbidden(text: String): SpotifyException {
+    val reason = runCatching { JSONObject(text).optJSONObject("error")?.optString("reason") }.getOrNull().orEmpty()
+    val msg = errorMessage(text)
+    return when {
+        reason == "PREMIUM_REQUIRED" || msg.contains("premium", true) -> SpotifyException.PremiumRequired()
+        msg.contains("not be registered", true) || msg.contains("developer.spotify.com", true) ->
+            SpotifyException.NotRegistered()
+        msg.contains("Restriction violated", true) || reason == "UNKNOWN" ->
+            SpotifyException.Http(403, "Spotify не разрешил это действие (${msg.ifBlank { "ограничение" }})")
+        else -> SpotifyException.Http(403, msg.ifBlank { "доступ запрещён" })
     }
 }
 
