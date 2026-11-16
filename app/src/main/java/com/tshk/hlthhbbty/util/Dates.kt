@@ -49,25 +49,3 @@ fun daysWord(n: Int): String {
     }
 }
 
-/** Длина текущей серии: подряд идущие выполненные дни до сегодня (сегодня может быть ещё не выполнено). */
-fun currentStreak(doneDays: Set<Long>, today: Long = today()): Int {
-    var day = if (today in doneDays) today else today - 1
-    var streak = 0
-    while (day in doneDays) {
-        streak++
-        day--
-    }
-    return streak
-}
-
-fun bestStreak(doneDays: Set<Long>): Int {
-    var best = 0
-    var run = 0
-    var prev: Long? = null
-    for (d in doneDays.sorted()) {
-        run = if (prev != null && d == prev + 1) run + 1 else 1
-        best = maxOf(best, run)
-        prev = d
-    }
-    return best
-}

@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0"
+        versionCode = 5
+        versionName = "2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -80,6 +80,9 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.health.connect)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

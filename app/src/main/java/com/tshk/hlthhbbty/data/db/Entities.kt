@@ -1,5 +1,6 @@
 package com.tshk.hlthhbbty.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -49,7 +50,31 @@ data class HabitEntity(
     val goalPerDay: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
     val archived: Boolean = false,
-)
+    /** Дни недели битовой маской: бит 0 — понедельник … бит 6 — воскресенье. */
+    @ColumnInfo(defaultValue = "127") val scheduleMask: Int = HabitKind.EVERY_DAY,
+    /** Время напоминания в минутах от полуночи. */
+    val reminderMinutes: Int? = null,
+    /** GOOD — полезная привычка, QUIT — отказ от вредной. */
+    @ColumnInfo(defaultValue = "GOOD") val kind: String = HabitKind.GOOD,
+    /** Для QUIT: момент, с которого идёт отсчёт. */
+    val quitSince: Long? = null,
+    /** Автоотметка из Health Connect: STEPS или SLEEP. */
+    val healthMetric: String? = null,
+    /** Порог: шагов или минут сна. */
+    val healthTarget: Int? = null,
+    /** Длительность таймера фокуса в минутах. */
+    val focusMinutes: Int? = null,
+) {
+    val isQuit get() = kind == HabitKind.QUIT
+}
+
+object HabitKind {
+    const val GOOD = "GOOD"
+    const val QUIT = "QUIT"
+    const val EVERY_DAY = 0b1111111
+    const val METRIC_STEPS = "STEPS"
+    const val METRIC_SLEEP = "SLEEP"
+}
 
 @Entity(
     tableName = "habit_checks",
@@ -87,6 +112,40 @@ data class WaterLogEntity(
     val amountMl: Int,
     val epochDay: Long,
     val timestamp: Long = System.currentTimeMillis(),
+)
+
+@Entity(
+    tableName = "habit_freezes",
+    primaryKeys = ["habitId", "epochDay"],
+    foreignKeys = [
+        ForeignKey(
+            entity = HabitEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["habitId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class FreezeEntity(val habitId: Long, val epochDay: Long)
+
+@Entity(
+    tableName = "day_notes",
+    primaryKeys = ["userId", "epochDay"],
+    foreignKeys = [
+        ForeignKey(
+            entity = UserEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["userId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class DayNoteEntity(
+    val userId: Long,
+    val epochDay: Long,
+    /** 1..5, 0 — не указано. */
+    val mood: Int,
+    val note: String = "",
 )
 
 data class DayTotal(val epochDay: Long, val total: Int)

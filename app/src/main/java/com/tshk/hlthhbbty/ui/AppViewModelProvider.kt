@@ -2,7 +2,12 @@ package com.tshk.hlthhbbty.ui
 
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.tshk.hlthhbbty.ui.achievements.AchievementsViewModel
+import com.tshk.hlthhbbty.ui.focus.FocusViewModel
+import com.tshk.hlthhbbty.ui.habits.HabitEditorViewModel
+import com.tshk.hlthhbbty.ui.settings.SettingsViewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tshk.hlthhbbty.AppContainer
@@ -25,6 +30,10 @@ object AppViewModelProvider {
         initializer { ProfileViewModel(container()) }
         initializer { EditProfileViewModel(container()) }
         initializer { ChangePasswordViewModel(container()) }
+        initializer { HabitEditorViewModel(container(), createSavedStateHandle()) }
+        initializer { FocusViewModel(container(), createSavedStateHandle()) }
+        initializer { AchievementsViewModel(container()) }
+        initializer { SettingsViewModel(container()) }
     }
 
     private fun CreationExtras.container(): AppContainer = (this[APPLICATION_KEY] as HlthApp).container

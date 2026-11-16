@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HLTH HBTy</string>
+    <string name="widget_description">Вода и привычки на сегодня</string>
 
     <string-array name="tips">
         <item>Начинайте день с улыбки. Ничто не заряжает позитивом лучше.</item>

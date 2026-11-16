@@ -7,14 +7,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tshk.hlthhbbty.data.AppSettings
+import com.tshk.hlthhbbty.data.ThemeMode
 import com.tshk.hlthhbbty.ui.AppRoot
 import com.tshk.hlthhbbty.ui.theme.HlthTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val settingsFlow = (application as HlthApp).container.settings.settings
         setContent {
-            val dark = isSystemInDarkTheme()
+            val settings by settingsFlow.collectAsStateWithLifecycle(AppSettings())
+            val dark = when (settings.themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
             DisposableEffect(dark) {
                 val transparent = android.graphics.Color.TRANSPARENT
                 enableEdgeToEdge(
@@ -23,7 +33,7 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            HlthTheme(dark) { AppRoot() }
+            HlthTheme(dark, settings.accentIndex) { AppRoot() }
         }
     }
 }

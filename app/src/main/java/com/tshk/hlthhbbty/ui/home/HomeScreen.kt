@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.PlayArrow
+import com.tshk.hlthhbbty.ui.habits.QuitCard
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +66,7 @@ fun HomeScreen(
     onOpenProfile: () -> Unit,
     onOpenHabits: () -> Unit,
     onOpenIntegrations: () -> Unit,
+    onFocus: (com.tshk.hlthhbbty.data.db.HabitEntity) -> Unit,
     vm: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -71,6 +74,10 @@ fun HomeScreen(
     val user = s.user ?: return
     val tips = stringArrayResource(R.array.tips)
     val tip = tips[(s.day % tips.size).toInt()]
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        vm.refreshHealth()
+        onPauseOrDispose {}
+    }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -97,6 +104,8 @@ fun HomeScreen(
 
         item { WaterCard(s.waterMl, user.waterGoalMl, vm::addWater, vm::undoWater) }
 
+        s.health?.let { h -> item { HealthCard(h) } }
+
         item {
             val done = s.habits.count { it.done }
             GlassCard(Modifier.fillMaxWidth()) {
@@ -105,7 +114,7 @@ fun HomeScreen(
                 }
                 VSpace(12.dp)
                 if (s.habits.isEmpty()) {
-                    Text("Пока нет привычек.", color = p.textSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("На сегодня привычек нет.", color = p.textSecondary, style = MaterialTheme.typography.bodyMedium)
                     VSpace(12.dp)
                     GlassButton("Добавить привычку", onOpenHabits, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary, icon = Icons.Rounded.Add)
                 } else {
@@ -120,6 +129,10 @@ fun HomeScreen(
                                         Text("${h.count} из ${h.habit.goalPerDay} раз", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
+                                if (h.habit.focusMinutes != null && !h.done) {
+                                    GlassIconButton(Icons.Rounded.PlayArrow, "Таймер", { onFocus(h.habit) }, size = 38.dp, tint = p.accent)
+                                    Spacer(Modifier.width(8.dp))
+                                }
                                 HabitCheck(h.count, h.habit.goalPerDay, h.habit.colorIndex, { vm.tapHabit(h.habit) })
                             }
                         }
@@ -127,6 +140,10 @@ fun HomeScreen(
                 }
             }
         }
+
+        items(s.quits, key = { "q" + it.id }) { q -> QuitCard(q, onRelapse = { vm.relapse(q) }) }
+
+        item { MoodCard(s.note, vm::saveNote) }
 
         item {
             GlassCard(Modifier.fillMaxWidth()) {

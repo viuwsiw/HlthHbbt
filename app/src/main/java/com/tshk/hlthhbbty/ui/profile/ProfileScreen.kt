@@ -22,6 +22,8 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.MailOutline
@@ -67,6 +69,8 @@ fun ProfileScreen(
     onEditProfile: () -> Unit,
     onChangePassword: () -> Unit,
     onIntegrations: () -> Unit,
+    onAchievements: () -> Unit,
+    onSettings: () -> Unit,
     vm: ProfileViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -100,13 +104,17 @@ fun ProfileScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MiniStat("🔥", "${s.bestStreak}", "${daysWord(s.bestStreak)} серия", Modifier.weight(1f))
-                MiniStat("✅", "${s.doneToday}/${s.habitsCount}", "сегодня", Modifier.weight(1f))
+                MiniStat("✅", "${s.doneToday}/${s.plannedToday}", "сегодня", Modifier.weight(1f))
                 MiniStat("💧", "%.0f л".format(s.waterAllTimeMl / 1000f), "всего", Modifier.weight(1f))
             }
         }
         item {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
+                MenuRow(Icons.Rounded.EmojiEvents, "Достижения · ${s.achievementsUnlocked}/${s.achievementsTotal}", onClick = onAchievements)
+                MenuDivider()
                 MenuRow(Icons.Rounded.Edit, "Редактировать профиль", onClick = onEditProfile)
+                MenuDivider()
+                MenuRow(Icons.Rounded.Settings, "Настройки", onClick = onSettings)
                 MenuDivider()
                 MenuRow(Icons.Rounded.Extension, "Интеграции", onClick = onIntegrations)
                 MenuDivider()

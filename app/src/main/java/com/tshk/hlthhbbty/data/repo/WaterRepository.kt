@@ -7,6 +7,8 @@ import com.tshk.hlthhbbty.util.today
 import kotlinx.coroutines.flow.Flow
 
 class WaterRepository(private val dao: WaterDao) {
+    var onChanged: (suspend () -> Unit)? = null
+
     fun observeToday(userId: Long, day: Long = today()): Flow<Int> = dao.observeTotal(userId, day)
 
     fun observeTotals(userId: Long, fromDay: Long, toDay: Long): Flow<List<DayTotal>> =
@@ -14,9 +16,15 @@ class WaterRepository(private val dao: WaterDao) {
 
     fun observeAllTime(userId: Long): Flow<Int> = dao.observeAllTime(userId)
 
+    suspend fun todayOnce(userId: Long): Int = dao.totalOnce(userId, today())
+
     suspend fun add(userId: Long, amountMl: Int) {
         dao.insert(WaterLogEntity(userId = userId, amountMl = amountMl, epochDay = today()))
+        onChanged?.invoke()
     }
 
-    suspend fun undoLast(userId: Long) = dao.deleteLast(userId, today())
+    suspend fun undoLast(userId: Long) {
+        dao.deleteLast(userId, today())
+        onChanged?.invoke()
+    }
 }

@@ -85,6 +85,17 @@ val HabitColors = listOf(
     Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFF3B82F6), Color(0xFF84CC16),
 )
 
+/** Варианты акцентного цвета: основной и вторичный (для градиентов). */
+data class AccentOption(val title: String, val light: Pair<Color, Color>, val dark: Pair<Color, Color>)
+
+val AccentOptions = listOf(
+    AccentOption("Мята", Color(0xFF17B077) to Color(0xFF14A3B8), Color(0xFF2FD394) to Color(0xFF2CC3D6)),
+    AccentOption("Океан", Color(0xFF2563EB) to Color(0xFF06B6D4), Color(0xFF60A5FA) to Color(0xFF22D3EE)),
+    AccentOption("Лаванда", Color(0xFF7C3AED) to Color(0xFFDB2777), Color(0xFFA78BFA) to Color(0xFFF472B6)),
+    AccentOption("Закат", Color(0xFFEA580C) to Color(0xFFE11D48), Color(0xFFFB923C) to Color(0xFFFB7185)),
+    AccentOption("Лайм", Color(0xFF65A30D) to Color(0xFF0D9488), Color(0xFFA3E635) to Color(0xFF2DD4BF)),
+)
+
 val LocalPalette = staticCompositionLocalOf { LightPalette }
 
 object Liquid {
@@ -104,8 +115,10 @@ private val AppTypography = Typography().let { t ->
 }
 
 @Composable
-fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val p = if (dark) DarkPalette else LightPalette
+fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, content: @Composable () -> Unit) {
+    val accent = AccentOptions.getOrElse(accentIndex) { AccentOptions[0] }
+    val (a1, a2) = if (dark) accent.dark else accent.light
+    val p = (if (dark) DarkPalette else LightPalette).copy(accent = a1, accentSecondary = a2)
     val scheme = if (dark) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.onAccent, secondary = p.accentSecondary,

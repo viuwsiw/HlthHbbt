@@ -5,6 +5,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,6 +102,16 @@ fun StatsScreen(
                 )
             }
         }
+        item {
+            GlassCard(Modifier.fillMaxWidth()) {
+                SectionTitle("Год привычек")
+                VSpace(4.dp)
+                Text("Чем ярче клетка — тем больше привычек выполнено", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                VSpace(12.dp)
+                Heatmap(s.heatmap, s.heatmapStart)
+            }
+        }
+        item { MoodStats(s) }
         if (s.habitStats.isNotEmpty()) {
             item { SectionTitle("По привычкам за 30 дней", Modifier.padding(top = 4.dp)) }
             items(s.habitStats, key = { it.habit.id }) { st ->
@@ -208,6 +220,76 @@ private fun BarChart(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+private fun Heatmap(values: List<Float?>, start: Long) {
+    val p = Liquid.palette
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    LaunchedEffect(values.size) { scroll.scrollTo(scroll.maxValue) }
+    val weeks = (values.size + 6) / 7
+    Row(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(end = 6.dp)) {
+            com.tshk.hlthhbbty.util.WeekdayShort.forEachIndexed { i, d ->
+                Box(Modifier.height(13.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(if (i % 2 == 0) d else "", style = MaterialTheme.typography.labelSmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp)), color = p.textSecondary)
+                }
+            }
+        }
+        Row(Modifier.horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            for (w in 0 until weeks) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    for (d in 0 until 7) {
+                        val idx = w * 7 + d
+                        val v = values.getOrNull(idx)
+                        val exists = idx < values.size
+                        Box(
+                            Modifier
+                                .size(13.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(
+                                    when {
+                                        !exists -> Color.Transparent
+                                        v == null || v == 0f -> p.textSecondary.copy(alpha = 0.10f)
+                                        else -> p.accent.copy(alpha = 0.25f + 0.75f * v)
+                                    }
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoodStats(s: StatsState) {
+    val p = Liquid.palette
+    GlassCard(Modifier.fillMaxWidth()) {
+        SectionTitle("Настроение за неделю")
+        VSpace(12.dp)
+        Row(Modifier.fillMaxWidth()) {
+            s.moodWeek.forEachIndexed { i, m ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (m > 0) com.tshk.hlthhbbty.data.repo.MoodEmoji[m - 1] else "·", style = MaterialTheme.typography.titleLarge, color = p.textSecondary)
+                    Text(shortWeekday(s.day - (6 - i)), style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+            }
+        }
+        if (s.moodGood != null && s.moodOther != null) {
+            VSpace(12.dp)
+            val diff = s.moodGood - s.moodOther
+            Text(
+                if (diff > 0.05f) "В дни, когда вы выполняете привычки, настроение выше на %.1f балла 💪".format(diff)
+                else "Связь настроения и привычек пока не видна — продолжайте отмечать.",
+                style = MaterialTheme.typography.bodyMedium, color = p.textPrimary,
+            )
+        } else {
+            VSpace(8.dp)
+            Text("Отмечайте настроение на главном экране — здесь появится аналитика.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
         }
     }
 }

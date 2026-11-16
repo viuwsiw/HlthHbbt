@@ -60,6 +60,61 @@ interface HabitDao {
 
     @Query("DELETE FROM habit_checks WHERE habitId = :habitId AND epochDay = :day")
     suspend fun deleteCheck(habitId: Long, day: Long)
+
+    @Query("SELECT * FROM habits WHERE id = :id")
+    suspend fun findById(id: Long): HabitEntity?
+
+    @Query("SELECT * FROM habits WHERE userId = :userId AND archived = 0")
+    suspend fun activeOnce(userId: Long): List<HabitEntity>
+
+    @Query(
+        """
+        SELECT f.* FROM habit_freezes f
+        INNER JOIN habits h ON h.id = f.habitId
+        WHERE h.userId = :userId AND f.epochDay BETWEEN :fromDay AND :toDay
+        """
+    )
+    fun observeFreezes(userId: Long, fromDay: Long, toDay: Long): Flow<List<FreezeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFreeze(freeze: FreezeEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChecks(checks: List<HabitCheckEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFreezes(freezes: List<FreezeEntity>)
+
+    // --- для экспорта / импорта ---
+    @Query("SELECT * FROM habits WHERE userId = :userId")
+    suspend fun allForUser(userId: Long): List<HabitEntity>
+
+    @Query("SELECT c.* FROM habit_checks c INNER JOIN habits h ON h.id = c.habitId WHERE h.userId = :userId")
+    suspend fun allChecks(userId: Long): List<HabitCheckEntity>
+
+    @Query("SELECT f.* FROM habit_freezes f INNER JOIN habits h ON h.id = f.habitId WHERE h.userId = :userId")
+    suspend fun allFreezes(userId: Long): List<FreezeEntity>
+
+    @Query("DELETE FROM habits WHERE userId = :userId")
+    suspend fun deleteAllForUser(userId: Long)
+}
+
+@Dao
+interface NoteDao {
+    @Upsert
+    suspend fun upsert(note: DayNoteEntity)
+
+    @Query("SELECT * FROM day_notes WHERE userId = :userId AND epochDay = :day")
+    fun observe(userId: Long, day: Long): Flow<DayNoteEntity?>
+
+    @Query("SELECT * FROM day_notes WHERE userId = :userId AND epochDay BETWEEN :fromDay AND :toDay")
+    fun observeRange(userId: Long, fromDay: Long, toDay: Long): Flow<List<DayNoteEntity>>
+
+    @Query("SELECT * FROM day_notes WHERE userId = :userId")
+    suspend fun all(userId: Long): List<DayNoteEntity>
+
+    @Query("DELETE FROM day_notes WHERE userId = :userId")
+    suspend fun deleteAll(userId: Long)
 }
 
 @Dao
@@ -84,4 +139,16 @@ interface WaterDao {
 
     @Query("SELECT COALESCE(SUM(amountMl), 0) FROM water_logs WHERE userId = :userId")
     fun observeAllTime(userId: Long): Flow<Int>
+
+    @Query("SELECT COALESCE(SUM(amountMl), 0) FROM water_logs WHERE userId = :userId AND epochDay = :day")
+    suspend fun totalOnce(userId: Long, day: Long): Int
+
+    @Query("SELECT * FROM water_logs WHERE userId = :userId")
+    suspend fun all(userId: Long): List<WaterLogEntity>
+
+    @Query("DELETE FROM water_logs WHERE userId = :userId")
+    suspend fun deleteAll(userId: Long)
+
+    @Insert
+    suspend fun insertAll(logs: List<WaterLogEntity>)
 }

@@ -5,8 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.tshk.hlthhbbty.AppContainer
 import com.tshk.hlthhbbty.data.auth.AuthResult
 import com.tshk.hlthhbbty.data.db.UserEntity
-import com.tshk.hlthhbbty.util.currentStreak
-import com.tshk.hlthhbbty.util.today
+import com.tshk.hlthhbbty.data.Achievements
+import com.tshk.hlthhbbty.util.habitStreak
+import com.tshk.hlthhbbty.util.scheduledOn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +27,9 @@ data class ProfileState(
     val bestStreak: Int = 0,
     val waterAllTimeMl: Int = 0,
     val doneToday: Int = 0,
+    val plannedToday: Int = 0,
+    val achievementsUnlocked: Int = 0,
+    val achievementsTotal: Int = 0,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -33,22 +37,21 @@ class ProfileViewModel(private val c: AppContainer) : ViewModel() {
     private val userId = c.auth.currentUserId.filterNotNull()
 
     val state: StateFlow<ProfileState> = userId.flatMapLatest { id ->
-        val day = today()
-        combine(
-            c.users.observe(id),
-            c.habits.observeHabits(id),
-            c.habits.observeChecks(id, day - 365, day),
-            c.water.observeAllTime(id),
-        ) { user, habits, checks, water ->
-            val streaks = habits.map { h ->
-                currentStreak(checks.filter { it.habitId == h.id && it.count >= h.goalPerDay }.map { it.epochDay }.toSet(), day)
-            }
+        combine(c.users.observe(id), c.history.observe(id)) { user, h ->
+            val day = h.today
+            val planned = h.goodHabits.filter { it.scheduledOn(day) }
+            val achievements = Achievements.compute(h)
             ProfileState(
                 user = user,
-                habitsCount = habits.size,
-                bestStreak = streaks.maxOrNull() ?: 0,
-                waterAllTimeMl = water,
-                doneToday = habits.count { h -> checks.any { it.habitId == h.id && it.epochDay == day && it.count >= h.goalPerDay } },
+                habitsCount = h.habits.size,
+                bestStreak = h.goodHabits.maxOfOrNull { habit ->
+                    habitStreak(h.doneByHabit[habit.id].orEmpty(), h.frozenByHabit[habit.id].orEmpty(), habit.scheduleMask, day)
+                } ?: 0,
+                waterAllTimeMl = h.water.sumOf { it.total },
+                doneToday = planned.count { day in h.doneByHabit[it.id].orEmpty() },
+                plannedToday = planned.size,
+                achievementsUnlocked = achievements.count { it.unlocked },
+                achievementsTotal = achievements.size,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileState())

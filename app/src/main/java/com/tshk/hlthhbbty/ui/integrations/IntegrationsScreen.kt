@@ -44,7 +44,7 @@ import com.tshk.hlthhbbty.util.isAppInstalled
 import com.tshk.hlthhbbty.util.openUrl
 
 @Composable
-fun IntegrationsScreen(onBack: () -> Unit) {
+fun IntegrationsScreen(onBack: () -> Unit, onSettings: () -> Unit) {
     val p = Liquid.palette
     val context = LocalContext.current
     val installed = remember { MusicService.entries.associateWith { context.isAppInstalled(it.packageName) } }
@@ -89,15 +89,18 @@ fun IntegrationsScreen(onBack: () -> Unit) {
             }
         }
         item {
-            VSpace(4.dp)
-            GlassCard(Modifier.fillMaxWidth()) {
-                Text("Скоро", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
-                VSpace(6.dp)
-                Text(
-                    "Health Connect — автоматический импорт шагов и сна, напоминания о привычках.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = p.textSecondary,
-                )
+            SectionTitle("Здоровье", Modifier.padding(top = 8.dp))
+        }
+        item {
+            GlassCard(Modifier.fillMaxWidth(), onClick = onSettings) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("❤️", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Health Connect", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                        Text("Шаги и сон, автоотметка привычек. Подключение — в настройках.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                    }
+                }
             }
         }
     }
