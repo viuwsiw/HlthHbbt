@@ -75,12 +75,44 @@ class UpdateRepository(private val context: Context) {
         info.versionCode?.let { it > BuildConfig.VERSION_CODE }
             ?: (compareVersions(info.versionName, BuildConfig.VERSION_NAME) > 0)
 
-    /** Скачивает APK в кэш, сообщая прогресс 0..1. */
+    /**
+     * Скачивает APK и проверяет, что внутри действительно новая версия.
+     * Сначала через API GitHub (без кэша CDN), затем по прямой ссылке с защитой от кэша.
+     */
     suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val file = File(dir, "hlth-hbty-${info.versionName}.apk")
-        var url = URL(info.apkUrl)
+        val sources = listOfNotNull(apiUrlFor(info.apkUrl), cacheBusted(info.apkUrl))
+        var lastError: Throwable? = null
+        for (src in sources) {
+            val ok = runCatching { fetch(src, file, info, onProgress) }.onFailure { lastError = it }.isSuccess
+            if (ok && isNewerArchive(file)) return@withContext file
+            if (ok) lastError = IllegalStateException("Скачалась старая версия (кэш GitHub). Попробуйте через пару минут.")
+        }
+        file.delete()
+        throw lastError ?: IllegalStateException("Не удалось скачать обновление")
+    }
+
+    /** raw.githubusercontent.com/OWNER/REPO/REF/path → api.github.com/repos/OWNER/REPO/contents/path?ref=REF */
+    private fun apiUrlFor(url: String): String? {
+        val m = Regex("https://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)/([^?]+)").find(url) ?: return null
+        val (o, r, ref, path) = m.destructured
+        return "https://api.github.com/repos/$o/$r/contents/$path" + (if (ref != "HEAD") "?ref=$ref" else "")
+    }
+
+    private fun cacheBusted(url: String) = url + (if ('?' in url) "&" else "?") + "t=" + System.currentTimeMillis()
+
+    /** Версия внутри скачанного APK новее установленной? */
+    private fun isNewerArchive(file: File): Boolean {
+        val pi = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0) ?: return false
+        if (pi.packageName != context.packageName) return false
+        val code = if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()
+        return code > BuildConfig.VERSION_CODE
+    }
+
+    private fun fetch(src: String, file: File, info: UpdateInfo, onProgress: (Float) -> Unit) {
+        var url = URL(src)
         var conn: HttpURLConnection
         var redirects = 0
         while (true) {
@@ -88,6 +120,10 @@ class UpdateRepository(private val context: Context) {
                 connectTimeout = 20_000
                 readTimeout = 30_000
                 instanceFollowRedirects = true
+                useCaches = false
+                setRequestProperty("User-Agent", "HLTH-HBTy-Android")
+                setRequestProperty("Cache-Control", "no-cache")
+                if (url.host == "api.github.com") setRequestProperty("Accept", "application/vnd.github.raw")
             }
             val code = conn.responseCode
             if (code in 300..399 && redirects++ < 5) {
@@ -116,7 +152,6 @@ class UpdateRepository(private val context: Context) {
         } finally {
             conn.disconnect()
         }
-        file
     }
 
     fun canInstall(): Boolean = Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()

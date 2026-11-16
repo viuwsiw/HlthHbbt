@@ -6,6 +6,13 @@ data class ChangelogEntry(val version: String, val title: String, val items: Lis
 object Changelog {
     val entries = listOf(
         ChangelogEntry(
+            "1.0.2.1", "Исправление автообновления",
+            listOf(
+                "Обновление скачивается напрямую через API GitHub — без старой копии из кэша",
+                "Перед установкой проверяется версия внутри файла: больше никакого цикла обновлений",
+            ),
+        ),
+        ChangelogEntry(
             "1.0.2", "Музыка и навигация",
             listOf(
                 "Интеграции разделены на блоки: Плеер, Spotify, Яндекс Музыка",

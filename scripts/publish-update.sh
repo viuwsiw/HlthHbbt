@@ -9,8 +9,12 @@ cd "$(dirname "$0")/.."
 APK=app/build/outputs/apk/release/app-release.apk
 CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
 NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-cp "$APK" dist/HLTH-HBTy.apk
-SIZE=$(stat -c %s dist/HLTH-HBTy.apk)
+# У каждой версии своё имя файла: новую ссылку CDN GitHub не мог закэшировать заранее.
+git rm -q --ignore-unmatch dist/*.apk 2>/dev/null || true
+rm -f dist/*.apk
+OUT="dist/HLTH-HBTy-$CODE.apk"
+cp "$APK" "$OUT"
+SIZE=$(stat -c %s "$OUT")
 
 python3 - "$CODE" "$NAME" "$SIZE" "${1:-}" <<'PY'
 import json, sys
@@ -18,9 +22,9 @@ code, name, size, notes = sys.argv[1:5]
 json.dump({
     "versionCode": int(code),
     "versionName": name,
-    "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=" + code,
+    "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy-" + code + ".apk",
     "size": int(size),
     "changelog": notes.replace("\\n", "\n"),
 }, open("update.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 PY
-echo "Готово: $NAME ($CODE). Закоммитьте dist/HLTH-HBTy.apk и update.json."
+echo "Готово: $NAME ($CODE) → $OUT. Закоммитьте dist/ и update.json."
