@@ -1,7 +1,7 @@
 {
   "versionCode": 24,
   "versionName": "1.0.2.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy-24.apk",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/5f4d1e1802cfaec52e630b294909cc3b11e90749/dist/HLTH-HBTy-24.apk",
   "size": 3657407,
   "changelog": "• Исправлено автообновление: больше не скачивается старая версия и нет цикла обновлений"
 }
