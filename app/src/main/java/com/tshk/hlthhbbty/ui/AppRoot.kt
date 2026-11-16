@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.unit.dp
@@ -147,6 +148,22 @@ private fun MainScaffold() {
     // Нажатие на уведомление таймера — открыть «Фокус».
     val appContainer = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.tshk.hlthhbbty.HlthApp).container
     val openFocus by appContainer.focusTimer.openRequest.collectAsStateWithLifecycle()
+    // Кнопки виджета «Быстрые действия»
+    val widgetRoute by appContainer.widgetRoute.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(widgetRoute) {
+        val r = widgetRoute ?: return@LaunchedEffect
+        appContainer.widgetRoute.value = null
+        val userId = appContainer.auth.currentUserId.first() ?: return@LaunchedEffect
+        val habits = appContainer.habits.activeOnce(userId)
+        when (r) {
+            "habits" -> nav.switchTab(Routes.HABITS)
+            "walk" -> nav.navigate(Routes.walk(habits.firstOrNull { it.activity != null }?.id)) { launchSingleTop = true }
+            "focus" -> {
+                val id = appContainer.focusTimer.state.value?.habitId ?: habits.firstOrNull { it.focusMinutes != null }?.id
+                if (id != null) nav.navigate(Routes.focus(id)) { launchSingleTop = true } else nav.switchTab(Routes.HABITS)
+            }
+        }
+    }
     val openWalk by appContainer.walkOpenRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(openWalk) {
         if (openWalk) {

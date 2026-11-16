@@ -69,6 +69,10 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(EXTRA_OPEN_FOCUS)
             (application as HlthApp).container.focusTimer.openRequest.value = true
         }
+        intent?.getStringExtra(EXTRA_WIDGET_ROUTE)?.let { route ->
+            intent.removeExtra(EXTRA_WIDGET_ROUTE)
+            (application as HlthApp).container.widgetRoute.value = route
+        }
         if (intent?.getBooleanExtra(EXTRA_OPEN_WALK, false) == true) {
             intent.removeExtra(EXTRA_OPEN_WALK)
             (application as HlthApp).container.walkOpenRequest.value = true
@@ -78,5 +82,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_FOCUS = "open_focus"
         const val EXTRA_OPEN_WALK = "open_walk"
+        const val EXTRA_WIDGET_ROUTE = "widget_route"
     }
 }

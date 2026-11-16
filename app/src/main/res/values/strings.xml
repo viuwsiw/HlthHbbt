@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">HLTH HBTy</string>
     <string name="widget_description">Вода и привычки на сегодня</string>
+    <string name="quick_widget_description">Быстрые действия: вода, фокус, прогулка</string>
+    <string name="quick_widget_label">HLTH HBTy · Быстрые действия</string>
+    <string name="habits_widget_label">HLTH HBTy · Привычки</string>
 
     <string-array name="tips">
         <item>Начинайте день с улыбки. Ничто не заряжает позитивом лучше.</item>

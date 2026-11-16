@@ -61,11 +61,7 @@ class HabitsWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = load(context)
         val density = context.resources.displayMetrics.density.coerceAtMost(2.5f)
-        provideContent {
-            val size = androidx.glance.LocalSize.current
-            val bg = glassBackground(data.palette, (size.width.value * density).toInt(), (size.height.value * density).toInt(), 28f * density)
-            GlanceTheme { Content(data, bg) }
-        }
+        provideContent { GlanceTheme { Content(data, density) } }
     }
 
     private suspend fun load(context: Context): WidgetData {
@@ -81,62 +77,58 @@ class HabitsWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun Content(d: WidgetData, bg: android.graphics.Bitmap) {
-        val p = d.palette
-        val text = ColorProvider(p.textPrimary)
-        val sub = ColorProvider(p.textSecondary)
-        val accent = p.accent
-        Box(GlanceModifier.fillMaxSize().clickable(actionStartActivity<MainActivity>())) {
-            androidx.glance.Image(
-                provider = androidx.glance.ImageProvider(bg),
-                contentDescription = null,
-                modifier = GlanceModifier.fillMaxSize(),
-                contentScale = androidx.glance.layout.ContentScale.FillBounds,
-            )
+    private fun Content(d: WidgetData, density: Float) {
+        val c = widgetColors(d.palette)
+        val context = androidx.glance.LocalContext.current
+        val text = ColorProvider(c.text)
+        val sub = ColorProvider(c.sub)
+        GlassPanel(c, density) {
             Column(GlanceModifier.fillMaxSize().padding(14.dp)) {
                 if (!d.loggedIn) {
                     Text("HLTH HBTy", style = TextStyle(color = text, fontWeight = FontWeight.Bold, fontSize = 16.sp))
                     Text("Войдите в приложение", style = TextStyle(color = sub, fontSize = 12.sp))
                     return@Column
                 }
-                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(GlanceModifier.defaultWeight()) {
-                        Text("💧 Вода", style = TextStyle(color = sub, fontSize = 11.sp))
-                        Text("%.2f / %.1f л".format(d.waterMl / 1000f, d.goalMl / 1000f),
-                            style = TextStyle(color = text, fontWeight = FontWeight.Bold, fontSize = 16.sp))
-                    }
+                // «Пилюля» с водой и кнопкой +250
+                Row(
+                    GlanceModifier.fillMaxWidth().height(50.dp).cornerRadius(25.dp).background(ColorProvider(c.pill))
+                        .padding(start = 16.dp, end = 6.dp)
+                        .clickable(androidx.glance.appwidget.action.actionStartActivity(openRoute(context, null))),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.glance.Image(androidx.glance.ImageProvider(com.tshk.hlthhbbty.R.drawable.ic_w_water), null, GlanceModifier.size(20.dp),
+                        colorFilter = androidx.glance.ColorFilter.tint(ColorProvider(c.accent)))
+                    Spacer(GlanceModifier.width(10.dp))
+                    Text("%.2f / %.1f л".format(d.waterMl / 1000f, d.goalMl / 1000f),
+                        style = TextStyle(color = text, fontWeight = FontWeight.Medium, fontSize = 15.sp), modifier = GlanceModifier.defaultWeight())
                     Box(
-                        GlanceModifier.cornerRadius(16.dp).background(ColorProvider(accent))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                        GlanceModifier.height(38.dp).cornerRadius(19.dp).background(ColorProvider(c.circle))
+                            .padding(horizontal = 14.dp)
                             .clickable(actionRunCallback<AddWaterAction>()),
-                    ) { Text("+250", style = TextStyle(color = ColorProvider(p.onAccent), fontWeight = FontWeight.Bold, fontSize = 13.sp)) }
-                }
-                // Полоска прогресса воды
-                Spacer(GlanceModifier.height(8.dp))
-                val frac = if (d.goalMl > 0) (d.waterMl.toFloat() / d.goalMl).coerceIn(0f, 1f) else 0f
-                Row(GlanceModifier.fillMaxWidth().height(6.dp).cornerRadius(3.dp).background(ColorProvider(accent.copy(alpha = 0.2f)))) {
-                    if (frac > 0f) Box(GlanceModifier.height(6.dp).width((frac * 280).dp).cornerRadius(3.dp).background(ColorProvider(accent))) {}
+                        contentAlignment = Alignment.Center,
+                    ) { Text("+250", style = TextStyle(color = text, fontWeight = FontWeight.Bold, fontSize = 13.sp)) }
                 }
                 Spacer(GlanceModifier.height(10.dp))
                 if (d.habits.isEmpty()) {
-                    Text("На сегодня привычек нет", style = TextStyle(color = sub, fontSize = 12.sp))
+                    Text("На сегодня привычек нет", style = TextStyle(color = sub, fontSize = 12.sp), modifier = GlanceModifier.padding(start = 6.dp))
                 }
-                d.habits.take(5).forEach { h ->
+                d.habits.take(4).forEach { h ->
                     Row(
-                        GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
-                            .cornerRadius(12.dp).background(ColorProvider(p.glassTint))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                        GlanceModifier.fillMaxWidth().padding(vertical = 3.dp)
                             .clickable(actionRunCallback<ToggleHabitAction>(actionParametersOf(habitKey to h.id))),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(h.emoji, style = TextStyle(fontSize = 14.sp))
-                        Spacer(GlanceModifier.width(8.dp))
-                        Text(h.title, maxLines = 1, style = TextStyle(color = text, fontSize = 13.sp), modifier = GlanceModifier.defaultWeight())
+                        // Круглая стеклянная отметка
                         Box(
-                            GlanceModifier.size(22.dp).cornerRadius(11.dp)
-                                .background(ColorProvider(if (h.done) accent else accent.copy(alpha = 0.18f))),
+                            GlanceModifier.size(36.dp).cornerRadius(18.dp)
+                                .background(ColorProvider(if (h.done) c.accent else c.circle)),
                             contentAlignment = Alignment.Center,
-                        ) { if (h.done) Text("✓", style = TextStyle(color = ColorProvider(p.onAccent), fontSize = 12.sp, fontWeight = FontWeight.Bold)) }
+                        ) {
+                            if (h.done) Text("✓", style = TextStyle(color = ColorProvider(c.onAccent), fontSize = 15.sp, fontWeight = FontWeight.Bold))
+                            else Text(h.emoji, style = TextStyle(fontSize = 15.sp))
+                        }
+                        Spacer(GlanceModifier.width(10.dp))
+                        Text(h.title, maxLines = 1, style = TextStyle(color = if (h.done) sub else text, fontSize = 14.sp), modifier = GlanceModifier.defaultWeight())
                     }
                 }
             }
@@ -144,7 +136,10 @@ class HabitsWidget : GlanceAppWidget() {
     }
 
     companion object {
-        suspend fun refresh(context: Context) = runCatching { HabitsWidget().updateAll(context) }
+        suspend fun refresh(context: Context) = runCatching {
+            HabitsWidget().updateAll(context)
+            QuickWidget().updateAll(context)
+        }
     }
 }
 

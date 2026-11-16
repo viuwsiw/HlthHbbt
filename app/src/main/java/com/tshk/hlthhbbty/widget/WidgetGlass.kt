@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import androidx.compose.ui.graphics.toArgb
@@ -26,43 +25,59 @@ fun widgetPalette(context: Context, s: AppSettings): LiquidPalette {
     return buildPalette(dark, s.themeMode == ThemeMode.BLACK, s.accentIndex)
 }
 
+/** Цвета стеклянного виджета: тонировка поверх обоев, «пилюли», кнопки, текст. */
+data class WidgetColors(
+    val panel: Int,
+    val pill: androidx.compose.ui.graphics.Color,
+    val circle: androidx.compose.ui.graphics.Color,
+    val text: androidx.compose.ui.graphics.Color,
+    val sub: androidx.compose.ui.graphics.Color,
+    val icon: androidx.compose.ui.graphics.Color,
+    val accent: androidx.compose.ui.graphics.Color,
+    val onAccent: androidx.compose.ui.graphics.Color,
+    val dark: Boolean,
+)
+
+fun widgetColors(p: LiquidPalette): WidgetColors {
+    val dark = p.isDark
+    val white = androidx.compose.ui.graphics.Color.White
+    val black = androidx.compose.ui.graphics.Color.Black
+    // Тонировка с лёгким оттенком фона темы — сквозь неё видны обои, как на iOS.
+    val tint = androidx.compose.ui.graphics.lerp(if (dark) black else white, p.base, 0.35f)
+    return WidgetColors(
+        panel = tint.copy(alpha = if (dark) 0.55f else 0.45f).toArgb(),
+        pill = (if (dark) white else white).copy(alpha = if (dark) 0.10f else 0.45f),
+        circle = (if (dark) white else white).copy(alpha = if (dark) 0.12f else 0.50f),
+        text = if (dark) white else p.textPrimary,
+        sub = if (dark) white.copy(alpha = 0.7f) else p.textSecondary,
+        icon = if (dark) white else p.textPrimary,
+        accent = p.accent,
+        onAccent = p.onAccent,
+        dark = dark,
+    )
+}
+
 /**
- * Подложка виджета «жидкое стекло»: аврора в цветах акцента, полупрозрачная панель,
- * световой ободок и блик сверху. Glance не умеет размывать, поэтому стекло рисуется картинкой.
+ * Подложка «жидкое стекло»: полупрозрачная тонированная панель со скруглением,
+ * мягкий блик сверху и световой ободок. Обои рабочего стола видны насквозь.
  */
-fun glassBackground(p: LiquidPalette, widthPx: Int, heightPx: Int, cornerPx: Float): Bitmap {
+fun glassBackground(c: WidgetColors, widthPx: Int, heightPx: Int, cornerPx: Float): Bitmap {
     val w = widthPx.coerceIn(100, 1400)
     val h = heightPx.coerceIn(100, 1400)
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val c = Canvas(bmp)
-    val rect = RectF(0f, 0f, w.toFloat(), h.toFloat())
-    val clip = android.graphics.Path().apply { addRoundRect(rect, cornerPx, cornerPx, android.graphics.Path.Direction.CW) }
-    c.clipPath(clip)
-
+    val canvas = Canvas(bmp)
+    val rect = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    // Фон + мягкие пятна
-    paint.color = p.base.toArgb()
-    c.drawRect(rect, paint)
-    val spots = listOf(0.15f to 0.2f, 0.85f to 0.15f, 0.55f to 0.95f, 0.05f to 0.9f)
-    spots.forEachIndexed { i, (fx, fy) ->
-        val col = p.blobs[i % p.blobs.size].toArgb()
-        val r = maxOf(w, h) * 0.75f
-        paint.shader = RadialGradient(fx * w, fy * h, r, intArrayOf(col and 0x00FFFFFF or (0xD0 shl 24), col and 0x00FFFFFF), null, Shader.TileMode.CLAMP)
-        c.drawRect(rect, paint)
-    }
-    paint.shader = null
-    // Стеклянная панель
-    paint.color = p.glassTint.toArgb()
-    c.drawRect(rect, paint)
+    paint.color = c.panel
+    canvas.drawRoundRect(rect, cornerPx, cornerPx, paint)
     // Блик сверху
-    paint.shader = LinearGradient(0f, 0f, 0f, h * 0.5f, p.sheen.toArgb(), 0x00FFFFFF, Shader.TileMode.CLAMP)
-    c.drawRect(rect, paint)
-    // Световой ободок
-    paint.shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(),
-        intArrayOf(p.rimBright.toArgb(), p.rimFaint.toArgb(), p.rimBright.copy(alpha = p.rimBright.alpha * 0.5f).toArgb()), null, Shader.TileMode.CLAMP)
+    paint.shader = LinearGradient(0f, 0f, 0f, h * 0.45f, 0x22FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
+    canvas.drawRoundRect(rect, cornerPx, cornerPx, paint)
+    // Световой ободок: ярче сверху-слева, гаснет к низу
+    paint.shader = LinearGradient(0f, 0f, w * 0.6f, h.toFloat(),
+        intArrayOf(0x88FFFFFF.toInt(), 0x1AFFFFFF, 0x44FFFFFF), null, Shader.TileMode.CLAMP)
     paint.style = Paint.Style.STROKE
-    paint.strokeWidth = 3f
-    val inset = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
-    c.drawRoundRect(inset, cornerPx, cornerPx, paint)
+    paint.strokeWidth = 2.5f
+    canvas.drawRoundRect(rect, cornerPx, cornerPx, paint)
     return bmp
 }

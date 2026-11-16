@@ -61,6 +61,8 @@ class AppContainer(private val context: Context) {
     val walks = com.tshk.hlthhbbty.walk.WalkTracker(context, db.walkDao(), habits)
     /** Запрос «открыть экран прогулки» (нажатие на уведомление). */
     val walkOpenRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** Экран, который просит открыть виджет: focus / walk / habits. */
+    val widgetRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val focusTimer = com.tshk.hlthhbbty.focus.FocusTimer(context)
     val media = com.tshk.hlthhbbty.media.MediaRepository(context)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
