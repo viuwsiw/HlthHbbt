@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 
 data class HabitStat(val habit: HabitEntity, val rate30: Float, val streak: Int, val best: Int)
 
@@ -69,15 +71,15 @@ class StatsViewModel(c: AppContainer) : ViewModel() {
                     val done = h.doneByHabit[habit.id].orEmpty()
                     val frozen = h.frozenByHabit[habit.id].orEmpty()
                     val planned = (0 until 30).map { day - it }
-                        .filter { it >= habit.createdDay() && isScheduled(habit.scheduleMask, it) }
+                        .filter { it >= h.createdDayOf(habit) && isScheduled(habit.scheduleMask, it) }
                     HabitStat(
                         habit = habit,
                         rate30 = if (planned.isEmpty()) 0f else planned.count { it in done } / planned.size.toFloat(),
                         streak = habitStreak(done, frozen, habit.scheduleMask, day),
-                        best = habitBestStreak(done, frozen, habit.scheduleMask, habit.createdDay(), day),
+                        best = habitBestStreak(done, frozen, habit.scheduleMask, h.createdDayOf(habit), day),
                     )
                 }.sortedByDescending { it.rate30 },
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsState())
 }

@@ -64,7 +64,9 @@ import com.tshk.hlthhbbty.ui.theme.Liquid
 @Composable
 fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by vm.state.collectAsStateWithLifecycle()
-    LiquidBackground {
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.tshk.hlthhbbty.HlthApp
+    val appSettings by appContext.container.settings.settings.collectAsStateWithLifecycle(com.tshk.hlthhbbty.data.AppSettings())
+    LiquidBackground(animated = appSettings.animatedBackground) {
         AnimatedContent(
             targetState = state,
             contentKey = { it::class },
@@ -82,9 +84,7 @@ fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory
         }
         UpdateHost()
         val context = androidx.compose.ui.platform.LocalContext.current
-        val settings by (context.applicationContext as com.tshk.hlthhbbty.HlthApp).container.settings.settings
-            .collectAsStateWithLifecycle(com.tshk.hlthhbbty.data.AppSettings())
-        if (settings.bugButton) BugTrackerButton()
+        if (appSettings.bugButton) BugTrackerButton()
         AskNotificationsOnce()
         val media = (context.applicationContext as com.tshk.hlthhbbty.HlthApp).container.media
         androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {

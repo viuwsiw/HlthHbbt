@@ -56,7 +56,7 @@ object Notifications {
     fun showHabit(context: Context, habitId: Long, title: String, emoji: String) {
         if (!canPost(context)) return
         val n = NotificationCompat.Builder(context, CHANNEL_HABITS)
-            .setSmallIcon(R.drawable.ic_stat_leaf)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle("$emoji $title")
             .setContentText("Самое время — не прерывайте серию!")
             .setContentIntent(openApp(context))
@@ -70,7 +70,7 @@ object Notifications {
     fun showWater(context: Context, currentMl: Int, goalMl: Int) {
         if (!canPost(context)) return
         val n = NotificationCompat.Builder(context, CHANNEL_WATER)
-            .setSmallIcon(R.drawable.ic_stat_leaf)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle("💧 Пора попить воды")
             .setContentText("Сегодня: $currentMl из $goalMl мл")
             .setContentIntent(openApp(context))
@@ -84,7 +84,7 @@ object Notifications {
     fun showAchievement(context: Context, id: Int, title: String, emoji: String) {
         if (!canPost(context)) return
         val n = NotificationCompat.Builder(context, CHANNEL_ACHIEVEMENTS)
-            .setSmallIcon(R.drawable.ic_stat_leaf)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle("$emoji Новое достижение!")
             .setContentText(title)
             .setContentIntent(openApp(context))

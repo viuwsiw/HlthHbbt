@@ -47,12 +47,14 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOn
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AchievementsViewModel(c: AppContainer) : ViewModel() {
     val achievements: StateFlow<List<Achievement>> = c.auth.currentUserId.filterNotNull()
         .flatMapLatest { c.history.observe(it) }
         .map { Achievements.compute(it).sortedByDescending { a -> a.unlocked } }
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 

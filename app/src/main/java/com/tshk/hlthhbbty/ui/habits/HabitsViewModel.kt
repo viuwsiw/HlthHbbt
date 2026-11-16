@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 enum class DayMark { DONE, MISSED, FROZEN, OFF, PENDING }
@@ -79,7 +81,7 @@ class HabitsViewModel(private val c: AppContainer) : ViewModel() {
                 },
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HabitsState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HabitsState())
 
     fun tap(habit: HabitEntity) = viewModelScope.launch { c.habits.tap(habit, today()) }
     fun freezeYesterday(habit: HabitEntity) = viewModelScope.launch { c.habits.freeze(habit.id, today() - 1) }

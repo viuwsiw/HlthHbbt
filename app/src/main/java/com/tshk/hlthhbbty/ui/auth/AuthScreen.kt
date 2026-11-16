@@ -66,7 +66,7 @@ fun AuthScreen(vm: AuthViewModel = viewModel(factory = AppViewModelProvider.Fact
             VSpace(40.dp)
             GlassSurface(Modifier.size(96.dp), shape = RoundedCornerShape(30.dp)) {
                 Image(
-                    painterResource(R.drawable.ic_launcher),
+                    painterResource(R.drawable.logo),
                     contentDescription = null,
                     modifier = Modifier.align(Alignment.Center).size(64.dp).clip(RoundedCornerShape(18.dp)),
                 )

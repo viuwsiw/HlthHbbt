@@ -49,6 +49,7 @@ import com.tshk.hlthhbbty.ui.theme.Liquid
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInputScale
 
 val GlassShape = RoundedCornerShape(28.dp)
 
@@ -56,6 +57,7 @@ val GlassShape = RoundedCornerShape(28.dp)
  * Базовая поверхность «жидкого стекла»: размытие фона + полупрозрачная заливка,
  * блик сверху и световой ободок. Без HazeState (отдельное окно) — плотная заливка.
  */
+@OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
 @Composable
 fun Modifier.glass(
     shape: Shape = GlassShape,
@@ -66,17 +68,24 @@ fun Modifier.glass(
     val p = Liquid.palette
     val haze = LocalHazeState.current
     val fill = tint ?: if (strong || haze == null) p.glassTintStrong else p.glassTint
-    val style = HazeStyle(
-        backgroundColor = p.base,
-        tint = HazeTint(fill),
-        blurRadius = blur,
-        noiseFactor = if (p.isDark) 0.05f else 0.035f,
-    )
-    val rim = Brush.linearGradient(listOf(p.rimBright, p.rimFaint, p.rimFaint, p.rimBright.copy(alpha = p.rimBright.alpha * 0.5f)))
-    val sheen = Brush.verticalGradient(0f to p.sheen, 0.45f to Color.Transparent)
+    val style = remember(p, fill, blur) {
+        HazeStyle(
+            backgroundColor = p.base,
+            tint = HazeTint(fill),
+            blurRadius = blur,
+            noiseFactor = if (p.isDark) 0.05f else 0.035f,
+        )
+    }
+    val rim = remember(p) { Brush.linearGradient(listOf(p.rimBright, p.rimFaint, p.rimFaint, p.rimBright.copy(alpha = p.rimBright.alpha * 0.5f))) }
+    val sheen = remember(p) { Brush.verticalGradient(0f to p.sheen, 0.45f to Color.Transparent) }
     return this
         .clip(shape)
-        .then(if (haze != null) Modifier.hazeEffect(haze, style) else Modifier.background(fill))
+        .then(
+            if (haze != null) Modifier.hazeEffect(haze, style) {
+                // Размытие в половинном разрешении: в ~4 раза меньше пикселей, на глаз неотличимо.
+                inputScale = HazeInputScale.Fixed(0.5f)
+            } else Modifier.background(fill)
+        )
         .drawWithContent {
             drawRect(sheen)
             drawContent()

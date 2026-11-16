@@ -40,7 +40,7 @@ fun Context.showMessage(title: String, text: String, action: MessageAction? = nu
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
     val builder = NotificationCompat.Builder(this, Notifications.CHANNEL_MESSAGES)
-        .setSmallIcon(R.drawable.ic_stat_leaf)
+        .setSmallIcon(R.drawable.ic_stat_logo)
         .setContentTitle(title)
         .setContentText(text)
         .setStyle(NotificationCompat.BigTextStyle().bigText(text))

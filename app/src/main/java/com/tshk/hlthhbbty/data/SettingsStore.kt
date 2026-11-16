@@ -25,6 +25,7 @@ data class AppSettings(
     val healthConnect: Boolean = false,
     val autoUpdate: Boolean = true,
     val bugButton: Boolean = true,
+    val animatedBackground: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -38,6 +39,7 @@ class SettingsStore(private val context: Context) {
         val health = booleanPreferencesKey("health_connect")
         val autoUpdate = booleanPreferencesKey("auto_update")
         val bugButton = booleanPreferencesKey("bug_button")
+        val animatedBg = booleanPreferencesKey("animated_background")
         val seen = stringSetPreferencesKey("seen_achievements")
     }
 
@@ -63,6 +65,7 @@ class SettingsStore(private val context: Context) {
             prefs[K.health] = s.healthConnect
             prefs[K.autoUpdate] = s.autoUpdate
             prefs[K.bugButton] = s.bugButton
+            prefs[K.animatedBg] = s.animatedBackground
         }
     }
 
@@ -76,5 +79,6 @@ class SettingsStore(private val context: Context) {
         healthConnect = this[K.health] ?: false,
         autoUpdate = this[K.autoUpdate] ?: true,
         bugButton = this[K.bugButton] ?: true,
+        animatedBackground = this[K.animatedBg] ?: false,
     )
 }

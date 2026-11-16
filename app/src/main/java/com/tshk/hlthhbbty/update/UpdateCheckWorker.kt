@@ -33,7 +33,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = NotificationCompat.Builder(applicationContext, Notifications.CHANNEL_ACHIEVEMENTS)
-            .setSmallIcon(R.drawable.ic_stat_leaf)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle("Доступна версия ${info.versionName}")
             .setContentText("Нажмите, чтобы обновить HLTH HBTy")
             .setContentIntent(open)

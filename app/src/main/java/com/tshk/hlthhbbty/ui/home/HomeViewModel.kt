@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 data class HabitToday(val habit: HabitEntity, val count: Int) {
@@ -59,7 +61,7 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
                 day = day,
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
     /** Вызывается при каждом появлении экрана. */
     fun refreshHealth() = viewModelScope.launch {

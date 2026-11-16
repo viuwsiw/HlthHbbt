@@ -104,6 +104,14 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             VSpace(12.dp)
             GlassSegmented(ThemeMode.entries.map { it.title }, s.themeMode.ordinal, { vm.setTheme(ThemeMode.entries[it]) })
             VSpace(16.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Живой фон", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text("Плавно движущиеся пятна. Нагружает слабые телефоны", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(s.animatedBackground, vm::setAnimatedBackground, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+            VSpace(16.dp)
             Text("Акцентный цвет", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
             VSpace(10.dp)
             androidx.compose.foundation.layout.FlowRow(

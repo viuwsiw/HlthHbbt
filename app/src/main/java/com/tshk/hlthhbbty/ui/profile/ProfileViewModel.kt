@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -54,7 +56,7 @@ class ProfileViewModel(private val c: AppContainer) : ViewModel() {
                 achievementsTotal = achievements.size,
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileState())
 
     fun logout() = viewModelScope.launch { c.auth.logout() }
 

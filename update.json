@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
-  "versionName": "2.8.4",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=18",
-  "size": 23692375,
-  "changelog": "• Фон приложения теперь окрашивается в цвет выбранного акцента\n• У AMOLED и Графита — нейтральный серый фон без цветных пятен"
+  "versionCode": 19,
+  "versionName": "2.9",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=19",
+  "size": 23308326,
+  "changelog": "• Новая иконка и логотип приложения\n• Оптимизация: интерфейс работает заметно плавнее\n• Фон по умолчанию статичный; живой фон включается в Настройках → Оформление"
 }

@@ -32,21 +32,28 @@ data class HistoryData(
     val notes: List<DayNoteEntity>,
 ) {
     val goodHabits = habits.filter { !it.isQuit }
+    private val createdDays: Map<Long, Long> = habits.associate { it.id to it.createdDay() }
+    private val completionCache = HashMap<Long, Float?>()
 
-    val doneByHabit: Map<Long, Set<Long>> = goodHabits.associate { h ->
-        h.id to checks.filter { it.habitId == h.id && it.count >= h.goalPerDay }.map { it.epochDay }.toSet()
+    val doneByHabit: Map<Long, Set<Long>> = run {
+        val byHabit = checks.groupBy { it.habitId }
+        goodHabits.associate { h ->
+            h.id to byHabit[h.id].orEmpty().filter { it.count >= h.goalPerDay }.mapTo(HashSet()) { it.epochDay }
+        }
     }
     val frozenByHabit: Map<Long, Set<Long>> = freezes.groupBy { it.habitId }.mapValues { e -> e.value.map { it.epochDay }.toSet() }
 
     /** Доля выполненных запланированных привычек за день, null — ничего не было запланировано. */
-    fun completion(day: Long): Float? {
-        val planned = goodHabits.filter { it.createdDay() <= day && it.scheduledOn(day) }
-        if (planned.isEmpty()) return null
-        return planned.count { day in doneByHabit[it.id].orEmpty() } / planned.size.toFloat()
+    fun completion(day: Long): Float? = completionCache.getOrPut(day) {
+        val planned = goodHabits.filter { (createdDays[it.id] ?: 0) <= day && it.scheduledOn(day) }
+        if (planned.isEmpty()) null
+        else planned.count { day in doneByHabit[it.id].orEmpty() } / planned.size.toFloat()
     }
 
+    fun createdDayOf(habit: HabitEntity) = createdDays[habit.id] ?: habit.createdDay()
+
     fun bestStreakEver(): Int = goodHabits.maxOfOrNull { h ->
-        habitBestStreak(doneByHabit[h.id].orEmpty(), frozenByHabit[h.id].orEmpty(), h.scheduleMask, h.createdDay(), today)
+        habitBestStreak(doneByHabit[h.id].orEmpty(), frozenByHabit[h.id].orEmpty(), h.scheduleMask, createdDayOf(h), today)
     } ?: 0
 }
 
@@ -56,7 +63,7 @@ object Achievements {
         val totalDone = d.doneByHabit.values.sumOf { it.size }
         val waterGoalDays = d.water.count { it.total >= d.waterGoal }
         val waterLiters = d.water.sumOf { it.total } / 1000
-        val firstDay = d.goodHabits.minOfOrNull { it.createdDay() } ?: d.today
+        val firstDay = d.goodHabits.minOfOrNull { d.createdDayOf(it) } ?: d.today
         val perfectDays = (maxOf(firstDay, d.today - 365)..d.today).count { d.completion(it) == 1f }
         val quitDays = d.habits.filter { it.isQuit }.maxOfOrNull {
             ((System.currentTimeMillis() - (it.quitSince ?: System.currentTimeMillis())) / 86_400_000L).toInt()

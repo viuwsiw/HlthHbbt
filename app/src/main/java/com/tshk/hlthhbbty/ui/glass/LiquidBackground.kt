@@ -1,11 +1,5 @@
 package com.tshk.hlthhbbty.ui.glass
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,6 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -47,17 +45,24 @@ private val blobs = listOf(
 @Composable
 fun LiquidBackground(
     modifier: Modifier = Modifier,
+    animated: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val palette = Liquid.palette
     val hazeState = remember { HazeState() }
-    val transition = rememberInfiniteTransition(label = "aurora")
-    val t by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(26_000, easing = LinearEasing), RepeatMode.Restart),
-        label = "t",
-    )
+    // Статичный фон: размытие считается один раз и кэшируется.
+    // Анимация — ~15 кадров/с: движение плавное и медленное, а нагрузка в разы ниже, чем на 60/120 Гц.
+    var t by remember { mutableFloatStateOf(0.6f) }
+    if (animated) {
+        LaunchedEffect(Unit) {
+            val start = System.nanoTime()
+            while (true) {
+                val seconds = (System.nanoTime() - start) / 1e9f
+                t = 0.6f + (seconds / 26f * 2 * PI.toFloat()) % (2 * PI.toFloat())
+                delay(66)
+            }
+        }
+    }
     Box(modifier.fillMaxSize().background(palette.base)) {
         Canvas(
             Modifier
