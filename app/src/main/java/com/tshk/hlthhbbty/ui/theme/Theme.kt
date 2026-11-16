@@ -110,6 +110,9 @@ val AccentOptions = listOf(
     AccentOption("Лаванда", Color(0xFF7C3AED) to Color(0xFFDB2777), Color(0xFFA78BFA) to Color(0xFFF472B6)),
     AccentOption("Закат", Color(0xFFEA580C) to Color(0xFFE11D48), Color(0xFFFB923C) to Color(0xFFFB7185)),
     AccentOption("Лайм", Color(0xFF65A30D) to Color(0xFF0D9488), Color(0xFFA3E635) to Color(0xFF2DD4BF)),
+    // Монохромные: в светлой теме — чёрные, в тёмной/чёрной — светлые, чтобы оставаться видимыми.
+    AccentOption("AMOLED", Color(0xFF000000) to Color(0xFF262626), Color(0xFFFFFFFF) to Color(0xFFBDBDBD)),
+    AccentOption("Графит", Color(0xFF1F1F1F) to Color(0xFF6B6B6B), Color(0xFFE0E0E0) to Color(0xFF8A8A8A)),
 )
 
 val LocalPalette = staticCompositionLocalOf { LightPalette }

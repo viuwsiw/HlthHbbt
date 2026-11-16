@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +68,7 @@ import com.tshk.hlthhbbty.util.openUrl
 import com.tshk.hlthhbbty.util.showMessage
 import java.time.LocalDate
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val s by vm.settings.collectAsStateWithLifecycle()
@@ -104,19 +106,30 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             VSpace(16.dp)
             Text("Акцентный цвет", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
             VSpace(10.dp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 AccentOptions.forEachIndexed { i, a ->
                     val (c1, c2) = if (p.isDark) a.dark else a.light
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(56.dp)) {
+                        // Кольцо выбора с зазором — видно даже на чёрном образце в тёмной теме.
                         Box(
                             Modifier
-                                .size(46.dp)
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    if (i == s.accentIndex) 2.5.dp else 1.dp,
+                                    if (i == s.accentIndex) p.textPrimary else p.textSecondary.copy(alpha = 0.25f),
+                                    CircleShape,
+                                )
+                                .clickable { vm.setAccent(i) }
+                                .padding(5.dp)
                                 .clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(c1, c2)))
-                                .border(if (i == s.accentIndex) 3.dp else 0.dp, if (i == s.accentIndex) p.textPrimary else c1, CircleShape)
-                                .clickable { vm.setAccent(i) }
                         )
-                        Text(a.title, style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                        Text(a.title, style = MaterialTheme.typography.labelSmall, color = p.textSecondary, maxLines = 1)
                     }
                 }
             }

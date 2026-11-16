@@ -1,7 +1,7 @@
 {
-  "versionCode": 16,
-  "versionName": "2.8.2",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=16",
-  "size": 23080177,
-  "changelog": "• Вернули исходную иконку приложения\n• Ошибки Spotify больше не спамят уведомлениями — показываются в разделе Spotify с ответом сервиса\n• Кнопки «Повторить» и «Войти заново»"
+  "versionCode": 17,
+  "versionName": "2.8.3",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=17",
+  "size": 23281873,
+  "changelog": "• Новые акцентные цвета: AMOLED (чёрный) и Графит (чёрно-серый)"
 }
