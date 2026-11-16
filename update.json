@@ -1,7 +1,7 @@
 {
-  "versionCode": 17,
-  "versionName": "2.8.3",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=17",
-  "size": 23281873,
-  "changelog": "• Новые акцентные цвета: AMOLED (чёрный) и Графит (чёрно-серый)"
+  "versionCode": 18,
+  "versionName": "2.8.4",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=18",
+  "size": 23692375,
+  "changelog": "• Фон приложения теперь окрашивается в цвет выбранного акцента\n• У AMOLED и Графита — нейтральный серый фон без цветных пятен"
 }

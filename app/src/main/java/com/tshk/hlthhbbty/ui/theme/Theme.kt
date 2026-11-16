@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -133,11 +134,44 @@ private val AppTypography = Typography().let { t ->
     )
 }
 
+private fun saturation(c: Color): Float {
+    val max = maxOf(c.red, c.green, c.blue)
+    val min = minOf(c.red, c.green, c.blue)
+    return if (max == 0f) 0f else (max - min) / max
+}
+
+/** Фон чуть подкрашен акцентом; у чёрной темы — всегда чистый чёрный. */
+private fun backgroundFor(accent: Color, dark: Boolean, black: Boolean): Color = when {
+    black -> Color.Black
+    dark -> lerp(Color(0xFF080A0C), accent, if (saturation(accent) < 0.15f) 0.03f else 0.07f)
+    else -> lerp(Color(0xFFF1F3F5), accent, if (saturation(accent) < 0.15f) 0.04f else 0.09f)
+}
+
+/** Пятна «авроры» — оттенки акцентных цветов; у монохромных акцентов — мягкие серые. */
+private fun blobsFor(a1: Color, a2: Color, dark: Boolean, black: Boolean): List<Color> {
+    val mono = saturation(a1) < 0.15f && saturation(a2) < 0.15f
+    val mid = lerp(a1, a2, 0.5f)
+    val raw = listOf(a1, a2, mid, lerp(a1, Color.White, 0.3f), lerp(a2, mid, 0.5f))
+    return raw.map { c ->
+        when {
+            black -> lerp(c, Color.Black, if (mono) 0.82f else 0.62f)
+            dark -> lerp(c, Color.Black, if (mono) 0.72f else 0.4f)
+            else -> lerp(c, Color.White, if (mono) 0.72f else 0.42f)
+        }
+    }
+}
+
 @Composable
 fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, black: Boolean = false, content: @Composable () -> Unit) {
     val accent = AccentOptions.getOrElse(accentIndex) { AccentOptions[0] }
     val (a1, a2) = if (dark) accent.dark else accent.light
-    val p = (if (black) BlackPalette else if (dark) DarkPalette else LightPalette).copy(accent = a1, accentSecondary = a2)
+    val base = if (black) BlackPalette else if (dark) DarkPalette else LightPalette
+    val p = base.copy(
+        accent = a1,
+        accentSecondary = a2,
+        base = backgroundFor(a1, dark, black),
+        blobs = blobsFor(a1, a2, dark, black),
+    )
     val scheme = if (dark || black) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.onAccent, secondary = p.accentSecondary,
