@@ -12,6 +12,7 @@ NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
 # У каждой версии своё имя файла: новую ссылку CDN GitHub не мог закэшировать заранее.
 git rm -q --ignore-unmatch dist/*.apk 2>/dev/null || true
 rm -f dist/*.apk
+mkdir -p dist
 OUT="dist/HLTH-HBTy-$CODE.apk"
 cp "$APK" "$OUT"
 SIZE=$(stat -c %s "$OUT")

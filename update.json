@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "1.0.2",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=23",
-  "size": 3657403,
-  "changelog": "• Интеграции разделены: Плеер, Spotify, Яндекс Музыка\n• После входа в Spotify на главной — только Spotify\n• Плейлисты Spotify запускаются в фоне, без переключения в Spotify\n• Плеер в нижней панели — потяните панель вверх, когда играет музыка\n• Свайпы между разделами, пока нижняя панель скрыта"
+  "versionCode": 24,
+  "versionName": "1.0.2.1",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy-24.apk",
+  "size": 3657407,
+  "changelog": "• Исправлено автообновление: больше не скачивается старая версия и нет цикла обновлений"
 }
