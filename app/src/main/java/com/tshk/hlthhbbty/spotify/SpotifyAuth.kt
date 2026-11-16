@@ -72,6 +72,9 @@ class SpotifyAuth(private val context: Context) {
             .appendQueryParameter("code_challenge", challenge)
             .appendQueryParameter("state", state)
             .appendQueryParameter("scope", SpotifyConfig.scopes.joinToString(" "))
+            // Всегда показывать экран подтверждения с «Это не вы?» — иначе Spotify молча
+            // берёт аккаунт, в который залогинен браузер, даже если он не добавлен в приложение.
+            .appendQueryParameter("show_dialog", "true")
             .build()
     }
 

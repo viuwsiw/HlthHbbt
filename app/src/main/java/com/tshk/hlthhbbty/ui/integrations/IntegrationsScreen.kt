@@ -84,7 +84,11 @@ fun IntegrationsScreen(
         // ---------- Spotify ----------
         item {
             SectionTitle("Spotify", Modifier.padding(top = 8.dp)) {
-                if (loggedIn) GlassChip(user?.let { if (it.isPremium) "Premium" else "Free" } ?: "Вход…", leading = "🟢")
+                if (loggedIn) when {
+                    user != null -> GlassChip(if (user!!.isPremium) "Premium" else "Free", leading = "🟢")
+                    profileError != null -> GlassChip("Нет доступа", leading = "🔴")
+                    else -> GlassChip("Вход…", leading = "🟡")
+                }
             }
         }
         when {
@@ -113,7 +117,13 @@ fun IntegrationsScreen(
                 }
             }
             else -> {
-                profileError?.let { err ->
+                val notRegistered = profileError?.contains("not registered", true) == true ||
+                    profileError?.contains("User Management", true) == true
+                if (notRegistered) {
+                    item { SpotifyNotRegisteredCard(vm) }
+                    item { SpotifyAccessNotice(vm) }
+                }
+                profileError?.takeIf { !notRegistered }?.let { err ->
                     item {
                         GlassCard(Modifier.fillMaxWidth()) {
                             Text("Spotify не отдал данные аккаунта", style = MaterialTheme.typography.titleSmall, color = p.danger)

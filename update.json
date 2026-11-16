@@ -1,7 +1,7 @@
 {
-  "versionCode": 21,
-  "versionName": "1.0.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=21",
-  "size": 3641019,
-  "changelog": "• Прогулка с картой: секундомер, шаги, GPS-маячок и трек маршрута\n• История прогулок и маршрут в Google Картах\n• «Лечь спать до 23:00» отмечается автоматически по использованию телефона\n• Виджет в стиле liquid glass в цветах вашей темы\n• «Чтение 30 минут» → «Хобби»"
+  "versionCode": 22,
+  "versionName": "1.0.1.1",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=22",
+  "size": 3657407,
+  "changelog": "• Вход в Spotify: можно выбрать другой аккаунт («Это не вы?»)\n• Понятная подсказка, если аккаунт не добавлен в приложение\n• Статус «Нет доступа» вместо бесконечного «Вход…»"
 }
