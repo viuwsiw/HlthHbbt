@@ -201,6 +201,41 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             VSpace(8.dp)
             Text("Импорт заменит текущие привычки, воду и заметки.", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
         }
+        VSpace(16.dp)
+
+        val upd by vm.updater.state.collectAsStateWithLifecycle()
+        GlassCard(Modifier.fillMaxWidth()) {
+            SectionTitle("Обновления") {
+                Text("v${com.tshk.hlthhbbty.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
+            }
+            VSpace(10.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Проверять автоматически", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text("При запуске и раз в сутки, из GitHub", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(s.autoUpdate, vm::setAutoUpdate, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+            VSpace(12.dp)
+            val status = when (val u = upd) {
+                com.tshk.hlthhbbty.update.UpdateState.Checking -> "Проверяем…"
+                com.tshk.hlthhbbty.update.UpdateState.UpToDate -> "У вас последняя версия ✓"
+                is com.tshk.hlthhbbty.update.UpdateState.Available -> "Доступна версия ${u.info.versionName}"
+                is com.tshk.hlthhbbty.update.UpdateState.Downloading -> "Загрузка ${(u.progress * 100).toInt()}%"
+                is com.tshk.hlthhbbty.update.UpdateState.Ready -> "Готово к установке"
+                is com.tshk.hlthhbbty.update.UpdateState.Failed -> "Ошибка: ${u.message}"
+                else -> null
+            }
+            status?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = if (upd is com.tshk.hlthhbbty.update.UpdateState.Failed) p.danger else p.textPrimary)
+                VSpace(10.dp)
+            }
+            when (val u = upd) {
+                is com.tshk.hlthhbbty.update.UpdateState.Available -> GlassButton("Обновить до ${u.info.versionName}", { vm.updater.download(u.info) }, Modifier.fillMaxWidth())
+                else -> GlassButton("Проверить обновления", { vm.updater.check() }, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary,
+                    loading = upd is com.tshk.hlthhbbty.update.UpdateState.Checking)
+            }
+        }
         VSpace(32.dp)
     }
 }

@@ -80,6 +80,7 @@ fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory
                 is RootState.Ready -> MainScaffold()
             }
         }
+        UpdateHost()
     }
 }
 

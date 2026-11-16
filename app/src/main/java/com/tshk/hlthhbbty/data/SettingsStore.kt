@@ -23,6 +23,7 @@ data class AppSettings(
     val waterFromHour: Int = 9,
     val waterToHour: Int = 21,
     val healthConnect: Boolean = false,
+    val autoUpdate: Boolean = true,
 )
 
 class SettingsStore(private val context: Context) {
@@ -34,6 +35,7 @@ class SettingsStore(private val context: Context) {
         val from = intPreferencesKey("water_from")
         val to = intPreferencesKey("water_to")
         val health = booleanPreferencesKey("health_connect")
+        val autoUpdate = booleanPreferencesKey("auto_update")
         val seen = stringSetPreferencesKey("seen_achievements")
     }
 
@@ -57,6 +59,7 @@ class SettingsStore(private val context: Context) {
             prefs[K.from] = s.waterFromHour
             prefs[K.to] = s.waterToHour
             prefs[K.health] = s.healthConnect
+            prefs[K.autoUpdate] = s.autoUpdate
         }
     }
 
@@ -68,5 +71,6 @@ class SettingsStore(private val context: Context) {
         waterFromHour = this[K.from] ?: 9,
         waterToHour = this[K.to] ?: 21,
         healthConnect = this[K.health] ?: false,
+        autoUpdate = this[K.autoUpdate] ?: true,
     )
 }

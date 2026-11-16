@@ -54,9 +54,12 @@ class AppContainer(private val context: Context) {
     val backup = BackupRepository(context, db)
     val health = HealthRepository(context, habits)
     val reminders = ReminderScheduler(context)
+    val updates = com.tshk.hlthhbbty.update.UpdateRepository(context)
+    val updater = com.tshk.hlthhbbty.update.UpdateController(updates, scope)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
 
     fun start() {
+        com.tshk.hlthhbbty.update.UpdateCheckWorker.schedule(context)
         habits.listener = object : HabitChangeListener {
             override suspend fun onHabitSaved(habit: HabitEntity) = reminders.scheduleHabit(habit)
             override suspend fun onHabitDeleted(habitId: Long) {

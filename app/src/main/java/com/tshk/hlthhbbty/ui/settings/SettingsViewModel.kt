@@ -37,6 +37,8 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     fun setTheme(mode: ThemeMode) = update { it.copy(themeMode = mode) }
     fun setAccent(i: Int) = update { it.copy(accentIndex = i) }
+    fun setAutoUpdate(on: Boolean) = update { it.copy(autoUpdate = on) }
+    val updater = c.updater
     fun setWaterReminders(on: Boolean) = update { it.copy(waterReminders = on) }
     fun setWaterInterval(h: Int) = update { it.copy(waterIntervalHours = h) }
     fun setWaterHours(from: Int, to: Int) = update { it.copy(waterFromHour = from, waterToHour = to) }

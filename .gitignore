@@ -8,6 +8,7 @@ build/
 .externalNativeBuild
 .cxx
 *.apk
+!dist/HLTH-HBTy.apk
 *.aab
 *.keystore
 !app/debug.keystore
