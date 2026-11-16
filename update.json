@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "1.0.2.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/5f4d1e1802cfaec52e630b294909cc3b11e90749/dist/HLTH-HBTy-24.apk",
-  "size": 3657407,
-  "changelog": "• Исправлено автообновление: больше не скачивается старая версия и нет цикла обновлений"
+  "versionCode": 25,
+  "versionName": "1.0.2.2",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/4067dfa35c203e5741723f07fffa4cd81255be61/dist/HLTH-HBTy-25.apk",
+  "size": 3673791,
+  "changelog": "• При регистрации и входе нужно выдать все обязательные разрешения\n• Разрешение на установку обновлений — автообновление работает без ошибок\n• Автопроверка обновлений включается при входе"
 }
