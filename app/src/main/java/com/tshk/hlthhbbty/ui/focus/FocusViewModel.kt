@@ -5,79 +5,48 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tshk.hlthhbbty.AppContainer
 import com.tshk.hlthhbbty.data.db.HabitEntity
-import com.tshk.hlthhbbty.util.today
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import com.tshk.hlthhbbty.focus.FocusTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-data class FocusState(
-    val habit: HabitEntity? = null,
-    val totalMs: Long = 25 * 60_000L,
-    val remainingMs: Long = 25 * 60_000L,
-    val running: Boolean = false,
-    val finished: Boolean = false,
-)
-
-class FocusViewModel(private val c: AppContainer, private val handle: SavedStateHandle) : ViewModel() {
+class FocusViewModel(private val c: AppContainer, handle: SavedStateHandle) : ViewModel() {
     private val habitId = handle.get<String>("id")?.toLongOrNull() ?: -1L
-    private val _state = MutableStateFlow(FocusState())
-    val state: StateFlow<FocusState> = _state.asStateFlow()
-    private var ticker: Job? = null
+    private val timer = c.focusTimer
 
-    /** Момент окончания — переживает поворот и пересоздание процесса. */
-    private var endAt: Long
-        get() = handle["endAt"] ?: 0L
-        set(v) { handle["endAt"] = v }
+    private val _habit = MutableStateFlow<HabitEntity?>(null)
+    val habit: StateFlow<HabitEntity?> = _habit.asStateFlow()
+
+    /** Выбранная длительность (минуты) до старта. */
+    private val _minutes = MutableStateFlow(25)
+    val minutes: StateFlow<Int> = _minutes.asStateFlow()
+
+    val timerState: StateFlow<FocusTimerState?> = timer.state
 
     init {
+        timer.reload()
         viewModelScope.launch {
-            val habit = c.habits.find(habitId)
-            val total = (habit?.focusMinutes ?: 25) * 60_000L
-            val remaining = handle.get<Long>("remaining") ?: total
-            _state.value = FocusState(habit, total, remaining)
-            if (endAt > 0) start()
+            val h = c.habits.find(habitId)
+            _habit.value = h
+            _minutes.value = h?.focusMinutes ?: 25
         }
     }
+
+    /** Таймер на экране относится к этой привычке? */
+    fun isMine(s: FocusTimerState?) = s != null && s.habitId == habitId
+
+    fun setMinutes(m: Int) { _minutes.value = m.coerceIn(1, 240) }
 
     fun start() {
-        if (endAt <= 0) endAt = System.currentTimeMillis() + _state.value.remainingMs
-        _state.update { it.copy(running = true) }
-        ticker?.cancel()
-        ticker = viewModelScope.launch {
-            while (isActive) {
-                val left = endAt - System.currentTimeMillis()
-                if (left <= 0) {
-                    finish()
-                    break
-                }
-                _state.update { it.copy(remainingMs = left) }
-                handle["remaining"] = left
-                delay(250)
-            }
-        }
+        val h = _habit.value ?: return
+        timer.start(h, _minutes.value)
+        // Запоминаем выбранное время как длительность по умолчанию для привычки.
+        if (h.focusMinutes != _minutes.value) viewModelScope.launch { c.habits.setFocusMinutes(h, _minutes.value) }
     }
 
-    fun pause() {
-        ticker?.cancel()
-        endAt = 0
-        _state.update { it.copy(running = false) }
-    }
-
-    fun reset() {
-        pause()
-        handle["remaining"] = _state.value.totalMs
-        _state.update { it.copy(remainingMs = it.totalMs, finished = false) }
-    }
-
-    private suspend fun finish() {
-        endAt = 0
-        handle["remaining"] = 0L
-        _state.update { it.copy(remainingMs = 0, running = false, finished = true) }
-        _state.value.habit?.let { c.habits.complete(it, today()) }
-    }
+    fun pause() = timer.pause()
+    fun resume() = timer.resume()
+    fun stop() = timer.stop()
+    fun dismissFinished() = timer.dismissFinished()
 }

@@ -68,8 +68,11 @@ fun HabitsScreen(
     val s by vm.state.collectAsStateWithLifecycle()
     val p = Liquid.palette
 
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    com.tshk.hlthhbbty.ui.glass.ReportScrollEnd(listState)
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

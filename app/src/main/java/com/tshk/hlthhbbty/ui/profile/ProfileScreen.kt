@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Extension
@@ -71,6 +72,7 @@ fun ProfileScreen(
     onIntegrations: () -> Unit,
     onAchievements: () -> Unit,
     onSettings: () -> Unit,
+    onStats: () -> Unit,
     vm: ProfileViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -80,8 +82,11 @@ fun ProfileScreen(
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
 
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    com.tshk.hlthhbbty.ui.glass.ReportScrollEnd(listState)
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -110,6 +115,8 @@ fun ProfileScreen(
         }
         item {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
+                MenuRow(Icons.Rounded.BarChart, "Статистика", onClick = onStats)
+                MenuDivider()
                 MenuRow(Icons.Rounded.EmojiEvents, "Достижения · ${s.achievementsUnlocked}/${s.achievementsTotal}", onClick = onAchievements)
                 MenuDivider()
                 MenuRow(Icons.Rounded.Edit, "Редактировать профиль", onClick = onEditProfile)
@@ -139,9 +146,6 @@ fun ProfileScreen(
                 MenuDivider()
                 MenuRow(Icons.Rounded.DeleteForever, "Удалить аккаунт", tint = p.danger, chevron = false) { confirmDelete = true }
             }
-        }
-        item {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { com.tshk.hlthhbbty.ui.glass.BetaBadge() }
         }
         item {
             Text(

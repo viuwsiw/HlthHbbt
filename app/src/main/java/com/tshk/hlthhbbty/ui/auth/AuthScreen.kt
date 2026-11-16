@@ -73,8 +73,6 @@ fun AuthScreen(vm: AuthViewModel = viewModel(factory = AppViewModelProvider.Fact
             }
             VSpace(20.dp)
             Text("HLTH HBTy", style = MaterialTheme.typography.displaySmall, color = p.textPrimary)
-            VSpace(8.dp)
-            com.tshk.hlthhbbty.ui.glass.BetaBadge()
             VSpace(6.dp)
             Text(
                 "Полезные привычки — каждый день",

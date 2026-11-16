@@ -106,6 +106,10 @@ class HabitRepository(private val dao: HabitDao) {
         listener?.onProgressChanged()
     }
 
+    suspend fun setFocusMinutes(habit: HabitEntity, minutes: Int) {
+        dao.update(habit.copy(focusMinutes = minutes))
+    }
+
     suspend fun freeze(habitId: Long, day: Long) {
         dao.insertFreeze(FreezeEntity(habitId, day))
         listener?.onProgressChanged()

@@ -19,6 +19,7 @@ object Notifications {
     const val CHANNEL_WATER = "water"
     const val CHANNEL_ACHIEVEMENTS = "achievements"
     const val CHANNEL_MESSAGES = "messages"
+    const val CHANNEL_FOCUS = "focus_timer"
     const val WATER_ID = 1
 
     fun createChannels(context: Context) {
@@ -29,6 +30,8 @@ object Notifications {
             NotificationChannel(CHANNEL_WATER, "Вода", NotificationManager.IMPORTANCE_DEFAULT)
                 .apply { description = "Напоминания попить воды" },
             NotificationChannel(CHANNEL_ACHIEVEMENTS, "Достижения", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL_FOCUS, "Таймер фокуса", NotificationManager.IMPORTANCE_LOW)
+                .apply { description = "Идущий таймер фокуса"; setShowBadge(false) },
             NotificationChannel(CHANNEL_MESSAGES, "Сообщения приложения", NotificationManager.IMPORTANCE_HIGH)
                 .apply { description = "Ошибки, подсказки и статусы (Spotify, обновления и т.д.)" },
         ))

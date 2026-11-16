@@ -269,7 +269,39 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
                     loading = upd is com.tshk.hlthhbbty.update.UpdateState.Checking)
             }
         }
+        VSpace(16.dp)
+        ChangelogCard()
         VSpace(32.dp)
+    }
+}
+
+@Composable
+private fun ChangelogCard() {
+    val p = Liquid.palette
+    var showAll by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val entries = com.tshk.hlthhbbty.data.Changelog.entries
+    GlassCard(Modifier.fillMaxWidth()) {
+        SectionTitle("Что нового")
+        VSpace(10.dp)
+        (if (showAll) entries else entries.take(1)).forEachIndexed { i, e ->
+            if (i > 0) VSpace(14.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(e.version, style = MaterialTheme.typography.titleSmall, color = if (i == 0) p.accent else p.textPrimary)
+                Text("  ·  ${e.title}", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+            }
+            VSpace(6.dp)
+            e.items.forEach { item ->
+                Row(Modifier.padding(vertical = 2.dp)) {
+                    Text("•  ", style = MaterialTheme.typography.bodyMedium, color = p.accent)
+                    Text(item, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
+                }
+            }
+        }
+        VSpace(12.dp)
+        GlassButton(
+            if (showAll) "Свернуть" else "Все версии",
+            { showAll = !showAll }, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary,
+        )
     }
 }
 

@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleSpotifyRedirect(intent)
+        handleFocusOpen(intent)
         val settingsFlow = (application as HlthApp).container.settings.settings
         setContent {
             val settings by settingsFlow.collectAsStateWithLifecycle(AppSettings())
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleSpotifyRedirect(intent)
+        handleFocusOpen(intent)
     }
 
     /** Возврат со страницы входа Spotify: hlthhbbty://spotify-callback?code=… */
@@ -60,5 +62,16 @@ class MainActivity : ComponentActivity() {
                 .onSuccess { showMessage("Spotify", "Аккаунт подключён — плейлисты и плеер доступны в «Интеграциях»") }
                 .onFailure { showSpotifyMessage("Не удалось войти: ${it.message}") }
         }
+    }
+
+    private fun handleFocusOpen(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_FOCUS, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_FOCUS)
+            (application as HlthApp).container.focusTimer.openRequest.value = true
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_FOCUS = "open_focus"
     }
 }

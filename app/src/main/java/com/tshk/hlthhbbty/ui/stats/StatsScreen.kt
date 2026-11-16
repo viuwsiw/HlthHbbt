@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,23 +53,18 @@ import com.tshk.hlthhbbty.util.shortWeekday
 
 @Composable
 fun StatsScreen(
-    contentPadding: PaddingValues,
+    onBack: () -> Unit,
     vm: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
     val p = Liquid.palette
 
     LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Column {
-                Text("Статистика", style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
-                Text("Последние 7 и 30 дней", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
-            }
-        }
+        item { com.tshk.hlthhbbty.ui.glass.ScreenHeader("Статистика", onBack, subtitle = "Неделя, месяц и год") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatTile("Средне воды", "%.1f л".format(s.waterWeek.average() / 1000), "в день", Modifier.weight(1f))

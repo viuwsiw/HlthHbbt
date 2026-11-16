@@ -112,12 +112,11 @@ private object Routes {
     fun focus(id: Long) = "focus/$id"
 }
 
-private val tabs = listOf(Routes.HOME, Routes.HABITS, Routes.STATS, Routes.PROFILE)
+private val tabs = listOf(Routes.HOME, Routes.HABITS, Routes.PROFILE)
 
 private val navItems = listOf(
     NavItem("Главная", Icons.Outlined.Home, Icons.Rounded.Home),
     NavItem("Привычки", Icons.Outlined.TaskAlt, Icons.Rounded.TaskAlt),
-    NavItem("Статистика", Icons.Outlined.BarChart, Icons.Rounded.BarChart),
     NavItem("Профиль", Icons.Outlined.Person, Icons.Rounded.Person),
 )
 
@@ -137,6 +136,21 @@ private fun MainScaffold() {
         bottom = navBars.calculateBottomPadding() + 112.dp,
     )
 
+    // Панель видна, только когда список долистан до конца — не перекрывает кнопки.
+    val atEnd = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(route) { atEnd.value = true }
+
+    // Нажатие на уведомление таймера — открыть «Фокус».
+    val appContainer = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.tshk.hlthhbbty.HlthApp).container
+    val openFocus by appContainer.focusTimer.openRequest.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(openFocus) {
+        if (openFocus) {
+            appContainer.focusTimer.openRequest.value = false
+            appContainer.focusTimer.state.value?.let { nav.navigate(Routes.focus(it.habitId)) { launchSingleTop = true } }
+        }
+    }
+
+    androidx.compose.runtime.CompositionLocalProvider(com.tshk.hlthhbbty.ui.glass.LocalBottomBarAtEnd provides atEnd) {
     Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = nav,
@@ -154,6 +168,7 @@ private fun MainScaffold() {
                     onOpenIntegrations = { nav.navigate(Routes.INTEGRATIONS) },
                     onFocus = { nav.navigate(Routes.focus(it.id)) },
                     onOpenPlayer = { nav.navigate(Routes.PLAYER) },
+                    onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 )
             }
             composable(Routes.HABITS) {
@@ -164,7 +179,7 @@ private fun MainScaffold() {
                     onFocus = { nav.navigate(Routes.focus(it.id)) },
                 )
             }
-            composable(Routes.STATS) { StatsScreen(tabPadding) }
+            composable(Routes.STATS) { StatsScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.PROFILE) {
                 ProfileScreen(
                     contentPadding = tabPadding,
@@ -173,6 +188,7 @@ private fun MainScaffold() {
                     onIntegrations = { nav.navigate(Routes.INTEGRATIONS) },
                     onAchievements = { nav.navigate(Routes.ACHIEVEMENTS) },
                     onSettings = { nav.navigate(Routes.SETTINGS) },
+                    onStats = { nav.navigate(Routes.STATS) },
                 )
             }
             composable(Routes.EDIT_PROFILE) { EditProfileScreen(onboarding = false, onDone = { nav.popBackStack() }) }
@@ -208,7 +224,7 @@ private fun MainScaffold() {
         }
 
         AnimatedVisibility(
-            visible = tabIndex >= 0,
+            visible = tabIndex >= 0 && atEnd.value,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
@@ -222,6 +238,7 @@ private fun MainScaffold() {
                 onSelect = { nav.switchTab(tabs[it]) },
             )
         }
+    }
     }
 }
 

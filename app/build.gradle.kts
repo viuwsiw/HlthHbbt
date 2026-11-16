@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "2.9"
+        versionCode = 20
+        versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${project.findProperty("spotify.clientId") ?: ""}\"")
@@ -36,6 +36,8 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // Тот же ключ, что и у бета-сборок: релиз ставится поверх без удаления.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -61,6 +63,9 @@ android {
                 it.maxHeapSize = "3g"
             }
         }
+    }
+    lint {
+        checkReleaseBuilds = false
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }

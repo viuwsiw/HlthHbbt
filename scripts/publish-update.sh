@@ -5,8 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-./gradlew assembleDebug -q
-APK=app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease -q
+APK=app/build/outputs/apk/release/app-release.apk
 CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
 NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
 cp "$APK" dist/HLTH-HBTy.apk

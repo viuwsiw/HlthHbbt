@@ -20,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.rounded.PlayArrow
 import com.tshk.hlthhbbty.ui.habits.QuitCard
 import androidx.compose.material.icons.rounded.WaterDrop
@@ -28,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +72,7 @@ fun HomeScreen(
     onOpenIntegrations: () -> Unit,
     onFocus: (com.tshk.hlthhbbty.data.db.HabitEntity) -> Unit,
     onOpenPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     vm: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -80,15 +85,20 @@ fun HomeScreen(
         onPauseOrDispose {}
     }
 
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    com.tshk.hlthhbbty.ui.glass.ReportScrollEnd(listState)
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // Приветствие + совет дня мелким шрифтом
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    com.tshk.hlthhbbty.ui.glass.BetaBadge(Modifier.padding(bottom = 6.dp))
                     Text(greeting() + ",", style = MaterialTheme.typography.titleMedium, color = p.textSecondary)
                     Text(
                         user.displayName,
@@ -102,64 +112,88 @@ fun HomeScreen(
                     UserAvatar(user.avatar, user.displayName, 54.dp)
                 }
             }
+            VSpace(6.dp)
+            Text("💡 $tip", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
         }
 
+        // Главное: вода, шаги, сон
         item { WaterCard(s.waterMl, user.waterGoalMl, vm::addWater, vm::undoWater) }
+        item {
+            val h = s.health
+            if (h != null) HealthCard(h)
+            else GlassCard(Modifier.fillMaxWidth(), onClick = onOpenSettings) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("👟😴", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Шаги и сон", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                        Text("Подключите Health Connect в настройках", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = p.textSecondary)
+                }
+            }
+        }
 
-        s.health?.let { h -> item { HealthCard(h) } }
-
+        // Раскрывашка с остальным
         item {
             val done = s.habits.count { it.done }
-            GlassCard(Modifier.fillMaxWidth()) {
-                SectionTitle("Привычки на сегодня") {
-                    Text("$done из ${s.habits.size}", style = MaterialTheme.typography.labelLarge, color = p.accent)
+            val rotation by androidx.compose.animation.core.animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+            GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), onClick = { expanded = !expanded }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (expanded) "Свернуть" else "Привычки, настроение, музыка", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                        Text("Привычки сегодня: $done из ${s.habits.size}", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                    }
+                    Icon(
+                        Icons.Rounded.KeyboardArrowDown, null, tint = p.accent,
+                        modifier = Modifier.graphicsLayer { rotationZ = rotation },
+                    )
                 }
-                VSpace(12.dp)
-                if (s.habits.isEmpty()) {
-                    Text("На сегодня привычек нет.", color = p.textSecondary, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        if (expanded) {
+            item {
+                val done = s.habits.count { it.done }
+                GlassCard(Modifier.fillMaxWidth()) {
+                    SectionTitle("Привычки на сегодня") {
+                        Text("$done из ${s.habits.size}", style = MaterialTheme.typography.labelLarge, color = p.accent)
+                    }
                     VSpace(12.dp)
-                    GlassButton("Добавить привычку", onOpenHabits, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary, icon = Icons.Rounded.Add)
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        s.habits.forEach { h ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                HabitBadge(h.habit.emoji, h.habit.colorIndex, 42.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(h.habit.title, color = p.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    if (h.habit.goalPerDay > 1) {
-                                        Text("${h.count} из ${h.habit.goalPerDay} раз", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
+                    if (s.habits.isEmpty()) {
+                        Text("На сегодня привычек нет.", color = p.textSecondary, style = MaterialTheme.typography.bodyMedium)
+                        VSpace(12.dp)
+                        GlassButton("Добавить привычку", onOpenHabits, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary, icon = Icons.Rounded.Add)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            s.habits.forEach { h ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    HabitBadge(h.habit.emoji, h.habit.colorIndex, 42.dp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(h.habit.title, color = p.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        when {
+                                            h.habit.focusMinutes != null && h.done -> Text("Выполнено ✓", color = p.accent, style = MaterialTheme.typography.labelMedium)
+                                            h.habit.focusMinutes != null -> Text("Таймер фокуса", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
+                                            h.habit.goalPerDay > 1 -> Text("${h.count} из ${h.habit.goalPerDay} раз", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
+                                    if (h.habit.focusMinutes != null) {
+                                        // Привычки с таймером — только кнопка, ведущая в «Фокус»
+                                        GlassChip(if (h.done) "Ещё раз" else "Начать", leading = "⏱", onClick = { onFocus(h.habit) })
+                                    } else {
+                                        HabitCheck(h.count, h.habit.goalPerDay, h.habit.colorIndex, { vm.tapHabit(h.habit) })
                                     }
                                 }
-                                if (h.habit.focusMinutes != null && !h.done) {
-                                    GlassIconButton(Icons.Rounded.PlayArrow, "Таймер", { onFocus(h.habit) }, size = 38.dp, tint = p.accent)
-                                    Spacer(Modifier.width(8.dp))
-                                }
-                                HabitCheck(h.count, h.habit.goalPerDay, h.habit.colorIndex, { vm.tapHabit(h.habit) })
                             }
                         }
                     }
                 }
             }
+            items(s.quits, key = { "q" + it.id }) { q -> QuitCard(q, onRelapse = { vm.relapse(q) }) }
+            item { MoodCard(s.note, vm::saveNote) }
+            item { com.tshk.hlthhbbty.ui.integrations.MusicSection(onOpenIntegrations, onOpenPlayer) }
         }
-
-        items(s.quits, key = { "q" + it.id }) { q -> QuitCard(q, onRelapse = { vm.relapse(q) }) }
-
-        item { MoodCard(s.note, vm::saveNote) }
-
-        item {
-            GlassCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("💡", style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Совет дня", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
-                }
-                VSpace(8.dp)
-                Text(tip, style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
-            }
-        }
-
-        item { com.tshk.hlthhbbty.ui.integrations.MusicSection(onOpenIntegrations, onOpenPlayer) }
     }
 }
 
