@@ -45,6 +45,8 @@ import com.tshk.hlthhbbty.ui.glass.GlassIconButton
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import com.tshk.hlthhbbty.util.isAppInstalled
 import com.tshk.hlthhbbty.util.openUrl
+import com.tshk.hlthhbbty.util.showMessage
+import com.tshk.hlthhbbty.util.showSpotifyMessage
 import kotlinx.coroutines.delay
 
 val SpotifyGreen = Color(0xFF1DB954)
@@ -102,7 +104,7 @@ fun MiniPlayer(pb: Playback, onToggle: () -> Unit, onNext: () -> Unit, onOpen: (
 fun Context.openSpotifyApp() {
     if (isAppInstalled("com.spotify.music")) {
         packageManager.getLaunchIntentForPackage("com.spotify.music")?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        Toast.makeText(this, "Включите любой трек в Spotify и вернитесь — плеер подхватит его", Toast.LENGTH_LONG).show()
+        showMessage("Spotify", "Включите любой трек в приложении Spotify и вернитесь — плеер подхватит воспроизведение.")
     } else {
         openUrl("market://details?id=com.spotify.music")
     }
@@ -124,7 +126,7 @@ fun SpotifyEvents(vm: SpotifyViewModel) {
             when (e) {
                 is SpotifyEvent.OpenUrl -> context.openLogin(e.uri)
                 SpotifyEvent.OpenSpotifyApp -> context.openSpotifyApp()
-                is SpotifyEvent.Message -> Toast.makeText(context, e.text, Toast.LENGTH_SHORT).show()
+                is SpotifyEvent.Message -> context.showSpotifyMessage(e.text)
             }
         }
     }

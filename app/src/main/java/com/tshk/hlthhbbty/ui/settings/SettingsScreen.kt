@@ -64,6 +64,7 @@ import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.theme.AccentOptions
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import com.tshk.hlthhbbty.util.openUrl
+import com.tshk.hlthhbbty.util.showMessage
 import java.time.LocalDate
 
 @Composable
@@ -81,7 +82,7 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
         onPauseOrDispose {}
     }
     LaunchedEffect(message) {
-        message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeMessage() }
+        message?.let { context.showMessage("Настройки", it); vm.consumeMessage() }
     }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifAllowed = it }

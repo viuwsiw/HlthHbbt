@@ -56,6 +56,7 @@ import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.glass.glass
 import com.tshk.hlthhbbty.ui.glass.liquidPress
 import com.tshk.hlthhbbty.ui.theme.Liquid
+import com.tshk.hlthhbbty.util.showMessage
 import kotlin.math.roundToInt
 
 private const val REPO = "viuwsiw/HlthHbbt"
@@ -164,7 +165,7 @@ private fun Context.openIssue(text: String, steps: String, withDevice: Boolean) 
     try {
         startActivity(Intent(Intent.ACTION_VIEW, uri))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(this, "Нет браузера для открытия GitHub", Toast.LENGTH_SHORT).show()
+        showMessage("Багтрекер", "Нет браузера для открытия GitHub")
     }
 }
 
@@ -177,6 +178,6 @@ private fun Context.mailReport(text: String, steps: String, withDevice: Boolean)
     try {
         startActivity(Intent.createChooser(intent, "Отправить отчёт"))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(this, "Не найдено почтовое приложение", Toast.LENGTH_SHORT).show()
+        showMessage("Багтрекер", "Не найдено почтовое приложение")
     }
 }

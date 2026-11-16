@@ -85,6 +85,7 @@ fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory
         val settings by (context.applicationContext as com.tshk.hlthhbbty.HlthApp).container.settings.settings
             .collectAsStateWithLifecycle(com.tshk.hlthhbbty.data.AppSettings())
         if (settings.bugButton) BugTrackerButton()
+        AskNotificationsOnce()
     }
 }
 
@@ -224,5 +225,23 @@ private fun NavHostController.switchTab(route: String) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+
+/** Один раз просим разрешение на уведомления (Android 13+): напоминания и сообщения приходят в шторку. */
+@Composable
+private fun AskNotificationsOnce() {
+    if (android.os.Build.VERSION.SDK_INT < 33) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) {}
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("ui_flags", android.content.Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("asked_notifications", false) && !com.tshk.hlthhbbty.reminders.Notifications.canPost(context)) {
+            prefs.edit().putBoolean("asked_notifications", true).apply()
+            launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 }

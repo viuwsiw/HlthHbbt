@@ -1,7 +1,7 @@
 {
-  "versionCode": 11,
-  "versionName": "2.7",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=11",
-  "size": 23087232,
-  "changelog": "• Обновления находятся сразу после публикации (без задержки кэша GitHub)\n• Проверка обновлений при каждом возвращении в приложение"
+  "versionCode": 12,
+  "versionName": "2.7.1",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=12",
+  "size": 23087236,
+  "changelog": "• Сообщения и ошибки теперь приходят в панель уведомлений с полным текстом\n• Для ошибок Spotify — кнопка «Открыть Spotify Dashboard»\n• Запрос разрешения на уведомления при первом запуске"
 }

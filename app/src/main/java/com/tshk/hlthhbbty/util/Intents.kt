@@ -12,7 +12,7 @@ fun Context.openUrl(url: String) {
     try {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(this, "Не найдено приложение для открытия ссылки", Toast.LENGTH_SHORT).show()
+        showMessage("HLTH HBTy", "Не найдено приложение для открытия ссылки")
     }
 }
 
@@ -32,7 +32,7 @@ fun Context.sendFeedback() {
     try {
         startActivity(Intent.createChooser(intent, "Написать разработчику"))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(this, "Не найдено почтовое приложение", Toast.LENGTH_SHORT).show()
+        showMessage("HLTH HBTy", "Не найдено почтовое приложение")
     }
 }
 

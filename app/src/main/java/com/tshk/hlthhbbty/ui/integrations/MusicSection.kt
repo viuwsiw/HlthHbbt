@@ -38,6 +38,7 @@ import com.tshk.hlthhbbty.ui.glass.SectionTitle
 import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import com.tshk.hlthhbbty.util.openUrl
+import com.tshk.hlthhbbty.util.showMessage
 
 /**
  * Блок музыки для главной и таймера фокуса: плейлисты Spotify играют прямо в приложении
@@ -59,9 +60,9 @@ fun MusicSection(
 
     val playSpotify: (String) -> Unit = { uri ->
         when {
-            !vm.configured -> Toast.makeText(context, "Spotify не настроен в этой сборке", Toast.LENGTH_SHORT).show()
+            !vm.configured -> context.showMessage("Spotify", "Spotify не настроен в этой сборке")
             !loggedIn -> {
-                Toast.makeText(context, "Войдите в Spotify, чтобы слушать прямо здесь", Toast.LENGTH_SHORT).show()
+                context.showMessage("Spotify", "Войдите в Spotify, чтобы слушать музыку прямо в приложении")
                 onOpenIntegrations()
             }
             else -> vm.play(contextUri = uri)

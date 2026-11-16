@@ -35,6 +35,7 @@ import com.tshk.hlthhbbty.ui.glass.GlassIconButton
 import com.tshk.hlthhbbty.ui.glass.GlassTextField
 import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.theme.Liquid
+import com.tshk.hlthhbbty.util.showMessage
 
 @Composable
 fun ChangePasswordScreen(
@@ -46,7 +47,7 @@ fun ChangePasswordScreen(
     val context = LocalContext.current
     LaunchedEffect(s.done) {
         if (s.done) {
-            android.widget.Toast.makeText(context, "Пароль изменён", android.widget.Toast.LENGTH_SHORT).show()
+            context.showMessage("Аккаунт", "Пароль изменён")
             onBack()
         }
     }

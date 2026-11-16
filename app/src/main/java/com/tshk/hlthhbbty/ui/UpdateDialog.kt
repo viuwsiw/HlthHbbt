@@ -28,6 +28,7 @@ import com.tshk.hlthhbbty.ui.glass.VSpace
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.tshk.hlthhbbty.util.showMessage
 
 /** Проверка при запуске и стеклянное окно обновления поверх всего приложения. */
 @Composable
@@ -47,13 +48,13 @@ fun UpdateHost() {
 
     val install: (java.io.File) -> Unit = { file ->
         if (!c.updates.canInstall()) {
-            Toast.makeText(context, "Разрешите установку из этого источника и нажмите «Установить» ещё раз", Toast.LENGTH_LONG).show()
+            context.showMessage("Обновление", "Разрешите установку из этого источника, вернитесь и нажмите «Установить» ещё раз")
             context.startActivity(c.updates.unknownSourcesSettings().addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         } else {
             try {
                 context.startActivity(c.updates.installIntent(file))
             } catch (e: ActivityNotFoundException) {
-                Toast.makeText(context, "Не удалось открыть установщик", Toast.LENGTH_SHORT).show()
+                context.showMessage("Обновление", "Не удалось открыть установщик пакетов")
             }
         }
     }

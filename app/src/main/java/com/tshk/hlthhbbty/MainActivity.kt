@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.tshk.hlthhbbty.util.showMessage
+import com.tshk.hlthhbbty.util.showSpotifyMessage
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -55,8 +57,8 @@ class MainActivity : ComponentActivity() {
         val c = (application as HlthApp).container
         lifecycleScope.launch {
             c.spotify.handleRedirect(uri)
-                .onSuccess { Toast.makeText(this@MainActivity, "Spotify подключён", Toast.LENGTH_SHORT).show() }
-                .onFailure { Toast.makeText(this@MainActivity, "Spotify: ${it.message}", Toast.LENGTH_LONG).show() }
+                .onSuccess { showMessage("Spotify", "Аккаунт подключён — плейлисты и плеер доступны в «Интеграциях»") }
+                .onFailure { showSpotifyMessage("Не удалось войти: ${it.message}") }
         }
     }
 }
