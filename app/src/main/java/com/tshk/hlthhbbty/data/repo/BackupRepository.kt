@@ -40,6 +40,7 @@ class BackupRepository(private val context: Context, private val db: AppDatabase
                         .put("healthMetric", h.healthMetric ?: JSONObject.NULL)
                         .put("healthTarget", h.healthTarget ?: JSONObject.NULL)
                         .put("focusMinutes", h.focusMinutes ?: JSONObject.NULL)
+                        .put("activity", h.activity ?: JSONObject.NULL)
                 }))
                 .put("checks", JSONArray(db.habitDao().allChecks(userId).map {
                     JSONObject().put("habitId", it.habitId).put("day", it.epochDay).put("count", it.count)
@@ -96,6 +97,7 @@ class BackupRepository(private val context: Context, private val db: AppDatabase
                         healthMetric = h.optStringOrNull("healthMetric"),
                         healthTarget = h.optIntOrNull("healthTarget"),
                         focusMinutes = h.optIntOrNull("focusMinutes"),
+                        activity = h.optStringOrNull("activity"),
                     ))
                     idMap[h.getLong("id")] = newId
                     imported++

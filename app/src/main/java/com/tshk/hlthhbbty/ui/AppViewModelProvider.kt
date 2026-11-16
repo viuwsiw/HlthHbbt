@@ -34,6 +34,7 @@ object AppViewModelProvider {
         initializer { FocusViewModel(container(), createSavedStateHandle()) }
         initializer { AchievementsViewModel(container()) }
         initializer { SettingsViewModel(container()) }
+        initializer { com.tshk.hlthhbbty.ui.walk.WalkViewModel(container(), createSavedStateHandle()) }
         initializer { com.tshk.hlthhbbty.ui.integrations.SpotifyViewModel(container(), createSavedStateHandle()) }
     }
 

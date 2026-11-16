@@ -108,6 +108,8 @@ private object Routes {
     const val SETTINGS = "settings"
     const val HABIT_EDIT = "habit/edit?id={id}&kind={kind}"
     const val FOCUS = "focus/{id}"
+    const val WALK = "walk/{id}"
+    fun walk(id: Long?) = "walk/${id ?: -1}"
     fun habitEdit(id: Long? = null, kind: String = HabitKind.GOOD) = "habit/edit?id=${id ?: -1}&kind=$kind"
     fun focus(id: Long) = "focus/$id"
 }
@@ -143,6 +145,13 @@ private fun MainScaffold() {
     // Нажатие на уведомление таймера — открыть «Фокус».
     val appContainer = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.tshk.hlthhbbty.HlthApp).container
     val openFocus by appContainer.focusTimer.openRequest.collectAsStateWithLifecycle()
+    val openWalk by appContainer.walkOpenRequest.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(openWalk) {
+        if (openWalk) {
+            appContainer.walkOpenRequest.value = false
+            nav.navigate(Routes.walk(appContainer.walks.session.value?.habitId)) { launchSingleTop = true }
+        }
+    }
     androidx.compose.runtime.LaunchedEffect(openFocus) {
         if (openFocus) {
             appContainer.focusTimer.openRequest.value = false
@@ -167,6 +176,7 @@ private fun MainScaffold() {
                     onOpenHabits = { nav.switchTab(Routes.HABITS) },
                     onOpenIntegrations = { nav.navigate(Routes.INTEGRATIONS) },
                     onFocus = { nav.navigate(Routes.focus(it.id)) },
+                    onWalk = { nav.navigate(Routes.walk(it.id)) },
                     onOpenPlayer = { nav.navigate(Routes.PLAYER) },
                     onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 )
@@ -177,6 +187,7 @@ private fun MainScaffold() {
                     onCreate = { kind -> nav.navigate(Routes.habitEdit(kind = kind)) },
                     onEdit = { nav.navigate(Routes.habitEdit(it.id, it.kind)) },
                     onFocus = { nav.navigate(Routes.focus(it.id)) },
+                    onWalk = { nav.navigate(Routes.walk(it.id)) },
                 )
             }
             composable(Routes.STATS) { StatsScreen(onBack = { nav.popBackStack() }) }
@@ -214,6 +225,9 @@ private fun MainScaffold() {
                     navArgument("kind") { type = NavType.StringType; defaultValue = HabitKind.GOOD },
                 ),
             ) { HabitEditorScreen(onBack = { nav.popBackStack() }) }
+            composable(Routes.WALK, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+                com.tshk.hlthhbbty.ui.walk.WalkScreen(onBack = { nav.popBackStack() })
+            }
             composable(Routes.FOCUS, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 FocusScreen(
                     onBack = { nav.popBackStack() },

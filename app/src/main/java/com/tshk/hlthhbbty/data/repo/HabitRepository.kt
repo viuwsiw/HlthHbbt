@@ -19,6 +19,7 @@ data class HabitDraft(
     val healthMetric: String? = null,
     val healthTarget: Int? = null,
     val focusMinutes: Int? = null,
+    val activity: String? = null,
 )
 
 /** Колбэки на изменения: обновить виджет, перепланировать напоминания. */
@@ -59,6 +60,7 @@ class HabitRepository(private val dao: HabitDao) {
             healthMetric = d.healthMetric,
             healthTarget = d.healthTarget,
             focusMinutes = d.focusMinutes,
+            activity = d.activity,
         )
         val id = dao.insert(habit)
         listener?.onHabitSaved(habit.copy(id = id))
@@ -78,6 +80,7 @@ class HabitRepository(private val dao: HabitDao) {
             healthMetric = d.healthMetric,
             healthTarget = d.healthTarget,
             focusMinutes = d.focusMinutes,
+            activity = d.activity,
         )
         dao.update(habit)
         listener?.onHabitSaved(habit)
@@ -110,6 +113,22 @@ class HabitRepository(private val dao: HabitDao) {
         dao.update(habit.copy(focusMinutes = minutes))
     }
 
+    /** Установить итог дня явно (для автоотметок). */
+    suspend fun setDone(habit: HabitEntity, day: Long, done: Boolean) {
+        val current = dao.countFor(habit.id, day) ?: 0
+        if (done && current < habit.goalPerDay) dao.upsertCheck(HabitCheckEntity(habit.id, day, habit.goalPerDay))
+        else if (!done && current > 0) dao.deleteCheck(habit.id, day)
+        else return
+        listener?.onProgressChanged()
+    }
+
+    /** Разовые обновления стандартных привычек при обновлении приложения. */
+    suspend fun migrateDefaults() {
+        dao.renameReadingToHobby()
+        dao.enableBedtimeAuto()
+        dao.enableWalkActivity()
+    }
+
     suspend fun freeze(habitId: Long, day: Long) {
         dao.insertFreeze(FreezeEntity(habitId, day))
         listener?.onProgressChanged()
@@ -123,10 +142,10 @@ class HabitRepository(private val dao: HabitDao) {
 
     suspend fun seedDefaults(userId: Long) {
         listOf(
-            HabitDraft("Прогулка на свежем воздухе", "🚶", 0),
-            HabitDraft("Чтение 30 минут", "📖", 2, focusMinutes = 30),
+            HabitDraft("Прогулка на свежем воздухе", "🚶", 0, activity = HabitKind.ACTIVITY_WALK),
+            HabitDraft("Хобби", "🎨", 2, focusMinutes = 30),
             HabitDraft("Зарядка", "🤸", 3, reminderMinutes = 8 * 60),
-            HabitDraft("Лечь спать до 23:00", "🌙", 4),
+            HabitDraft("Лечь спать до 23:00", "🌙", 4, healthMetric = HabitKind.METRIC_BEDTIME, healthTarget = 23 * 60),
         ).forEach { add(userId, it) }
     }
 }

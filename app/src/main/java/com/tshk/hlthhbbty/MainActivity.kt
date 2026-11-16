@@ -69,9 +69,14 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(EXTRA_OPEN_FOCUS)
             (application as HlthApp).container.focusTimer.openRequest.value = true
         }
+        if (intent?.getBooleanExtra(EXTRA_OPEN_WALK, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_WALK)
+            (application as HlthApp).container.walkOpenRequest.value = true
+        }
     }
 
     companion object {
         const val EXTRA_OPEN_FOCUS = "open_focus"
+        const val EXTRA_OPEN_WALK = "open_walk"
     }
 }

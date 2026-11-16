@@ -10,9 +10,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         UserEntity::class, HabitEntity::class, HabitCheckEntity::class, WaterLogEntity::class,
-        FreezeEntity::class, DayNoteEntity::class,
+        FreezeEntity::class, DayNoteEntity::class, WalkEntity::class, WalkPointEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -20,6 +20,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun waterDao(): WaterDao
     abstract fun noteDao(): NoteDao
+    abstract fun walkDao(): WalkDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -42,9 +43,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN activity TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `walks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` INTEGER NOT NULL, " +
+                        "`habitId` INTEGER, `startedAt` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `distanceM` REAL NOT NULL, " +
+                        "`steps` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `users`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_walks_userId` ON `walks` (`userId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `walk_points` (`walkId` INTEGER NOT NULL, `idx` INTEGER NOT NULL, `lat` REAL NOT NULL, " +
+                        "`lon` REAL NOT NULL, `time` INTEGER NOT NULL, PRIMARY KEY(`walkId`, `idx`), " +
+                        "FOREIGN KEY(`walkId`) REFERENCES `walks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "hlth_hbbty.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

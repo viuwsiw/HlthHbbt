@@ -97,6 +97,34 @@ interface HabitDao {
 
     @Query("DELETE FROM habits WHERE userId = :userId")
     suspend fun deleteAllForUser(userId: Long)
+
+    // Обновление стандартных привычек у существующих пользователей (1.0.1)
+    @Query("UPDATE habits SET title = 'Хобби', emoji = '🎨' WHERE title = 'Чтение 30 минут'")
+    suspend fun renameReadingToHobby()
+
+    @Query("UPDATE habits SET healthMetric = 'BEDTIME', healthTarget = 1380 WHERE title = 'Лечь спать до 23:00' AND healthMetric IS NULL")
+    suspend fun enableBedtimeAuto()
+
+    @Query("UPDATE habits SET activity = 'WALK' WHERE title = 'Прогулка на свежем воздухе' AND activity IS NULL")
+    suspend fun enableWalkActivity()
+}
+
+@Dao
+interface WalkDao {
+    @Insert
+    suspend fun insert(walk: WalkEntity): Long
+
+    @Insert
+    suspend fun insertPoints(points: List<WalkPointEntity>)
+
+    @Query("SELECT * FROM walks WHERE userId = :userId ORDER BY startedAt DESC LIMIT 50")
+    fun observeWalks(userId: Long): Flow<List<WalkEntity>>
+
+    @Query("SELECT * FROM walk_points WHERE walkId = :walkId ORDER BY idx")
+    suspend fun points(walkId: Long): List<WalkPointEntity>
+
+    @Query("DELETE FROM walks WHERE id = :id")
+    suspend fun delete(id: Long)
 }
 
 @Dao

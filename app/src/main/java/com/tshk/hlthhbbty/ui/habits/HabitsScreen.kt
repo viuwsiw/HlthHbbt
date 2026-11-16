@@ -63,6 +63,7 @@ fun HabitsScreen(
     onCreate: (kind: String) -> Unit,
     onEdit: (HabitEntity) -> Unit,
     onFocus: (HabitEntity) -> Unit,
+    onWalk: (HabitEntity) -> Unit,
     vm: HabitsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -101,7 +102,7 @@ fun HabitsScreen(
         }
         items(s.habits, key = { it.habit.id }) { h ->
             HabitCard(h, s.day, onTap = { vm.tap(h.habit) }, onEdit = { onEdit(h.habit) },
-                onFreeze = { vm.freezeYesterday(h.habit) }, onFocus = { onFocus(h.habit) })
+                onFreeze = { vm.freezeYesterday(h.habit) }, onFocus = { onFocus(h.habit) }, onWalk = { onWalk(h.habit) })
         }
         item {
             SectionTitle("Отказ от вредного", Modifier.padding(top = 8.dp)) {
@@ -128,6 +129,7 @@ private fun HabitCard(
     onEdit: () -> Unit,
     onFreeze: () -> Unit,
     onFocus: () -> Unit,
+    onWalk: () -> Unit,
 ) {
     val p = Liquid.palette
     var expanded by rememberSaveable(h.habit.id) { mutableStateOf(false) }
@@ -191,7 +193,9 @@ private fun HabitCard(
             VSpace(12.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GlassButton("Изменить", onEdit, Modifier.weight(1f).height(46.dp), style = GlassButtonStyle.Secondary, icon = Icons.Rounded.Edit)
-                if (h.habit.focusMinutes != null && h.scheduledToday) {
+                if (h.habit.activity != null) {
+                    GlassButton("Прогулка", onWalk, Modifier.weight(1f).height(46.dp), icon = Icons.Rounded.PlayArrow)
+                } else if (h.habit.focusMinutes != null && h.scheduledToday) {
                     GlassButton("Таймер", onFocus, Modifier.weight(1f).height(46.dp), icon = Icons.Rounded.PlayArrow)
                 }
             }

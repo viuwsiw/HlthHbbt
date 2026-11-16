@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.0"
+        versionCode = 21
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${project.findProperty("spotify.clientId") ?: ""}\"")
@@ -98,6 +98,7 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.osmdroid)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.health.connect)

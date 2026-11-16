@@ -57,12 +57,32 @@ class AppContainer(private val context: Context) {
     val reminders = ReminderScheduler(context)
     val updates = com.tshk.hlthhbbty.update.UpdateRepository(context)
     val updater = com.tshk.hlthhbbty.update.UpdateController(updates, scope)
+    val bedtime = com.tshk.hlthhbbty.bedtime.BedtimeChecker(context, habits)
+    val walks = com.tshk.hlthhbbty.walk.WalkTracker(context, db.walkDao(), habits)
+    /** Запрос «открыть экран прогулки» (нажатие на уведомление). */
+    val walkOpenRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
     val focusTimer = com.tshk.hlthhbbty.focus.FocusTimer(context)
     val media = com.tshk.hlthhbbty.media.MediaRepository(context)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
 
     fun start() {
         com.tshk.hlthhbbty.update.UpdateCheckWorker.schedule(context)
+        bedtime.schedule()
+        scope.launch {
+            // Разовое обновление стандартных привычек (1.0.1): «Хобби», автоотбой, прогулка с картой.
+            val prefs = context.getSharedPreferences("migrations", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("defaults_101", false)) {
+                runCatching { habits.migrateDefaults() }
+                prefs.edit().putBoolean("defaults_101", true).apply()
+            }
+        }
+        // Разблокировка, пока приложение живо — сразу пересчитываем «отбой».
+        val unlockFilter = android.content.IntentFilter(android.content.Intent.ACTION_USER_PRESENT)
+        androidx.core.content.ContextCompat.registerReceiver(context, object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) {
+                scope.launch { auth.currentUserId.first()?.let { runCatching { bedtime.evaluate(it) } } }
+            }
+        }, unlockFilter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         habits.listener = object : HabitChangeListener {
             override suspend fun onHabitSaved(habit: HabitEntity) = reminders.scheduleHabit(habit)
             override suspend fun onHabitDeleted(habitId: Long) {
@@ -80,6 +100,12 @@ class AppContainer(private val context: Context) {
                 else reminders.rescheduleAll(habits.activeOnce(id), settings.current())
                 HabitsWidget.refresh(context)
             }
+        }
+        // Виджет перекрашивается вместе с темой и акцентом.
+        scope.launch {
+            settings.settings.distinctUntilChanged { a, b -> a.themeMode == b.themeMode && a.accentIndex == b.accentIndex }
+                .drop(1)
+                .collect { HabitsWidget.refresh(context) }
         }
         scope.launch {
             settings.settings.distinctUntilChanged { a, b -> a.waterReminders == b.waterReminders && a.waterIntervalHours == b.waterIntervalHours }

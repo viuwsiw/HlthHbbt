@@ -3,3 +3,5 @@
 -keep class com.tshk.hlthhbbty.** { *; }
 -keepattributes SourceFile,LineNumberTable,*Annotation*,Signature,InnerClasses,EnclosingMethod
 -dontwarn org.slf4j.**
+-keep class org.osmdroid.** { *; }
+-dontwarn org.osmdroid.**

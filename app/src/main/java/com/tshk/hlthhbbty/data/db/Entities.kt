@@ -64,6 +64,8 @@ data class HabitEntity(
     val healthTarget: Int? = null,
     /** Длительность таймера фокуса в минутах. */
     val focusMinutes: Int? = null,
+    /** Активность с трекером: WALK — прогулка с картой, GPS и шагами. */
+    val activity: String? = null,
 ) {
     val isQuit get() = kind == HabitKind.QUIT
 }
@@ -74,6 +76,9 @@ object HabitKind {
     const val EVERY_DAY = 0b1111111
     const val METRIC_STEPS = "STEPS"
     const val METRIC_SLEEP = "SLEEP"
+    /** Автоотметка «лечь спать до N»: снимается, если телефон разблокировали позже. */
+    const val METRIC_BEDTIME = "BEDTIME"
+    const val ACTIVITY_WALK = "WALK"
 }
 
 @Entity(
@@ -146,6 +151,38 @@ data class DayNoteEntity(
     /** 1..5, 0 — не указано. */
     val mood: Int,
     val note: String = "",
+)
+
+@Entity(
+    tableName = "walks",
+    foreignKeys = [
+        ForeignKey(entity = UserEntity::class, parentColumns = ["id"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("userId")],
+)
+data class WalkEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userId: Long,
+    val habitId: Long?,
+    val startedAt: Long,
+    val durationMs: Long,
+    val distanceM: Double,
+    val steps: Int,
+)
+
+@Entity(
+    tableName = "walk_points",
+    primaryKeys = ["walkId", "idx"],
+    foreignKeys = [
+        ForeignKey(entity = WalkEntity::class, parentColumns = ["id"], childColumns = ["walkId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class WalkPointEntity(
+    val walkId: Long,
+    val idx: Int,
+    val lat: Double,
+    val lon: Double,
+    val time: Long,
 )
 
 data class DayTotal(val epochDay: Long, val total: Int)

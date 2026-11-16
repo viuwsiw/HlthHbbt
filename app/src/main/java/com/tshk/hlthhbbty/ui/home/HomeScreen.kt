@@ -71,6 +71,7 @@ fun HomeScreen(
     onOpenHabits: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onFocus: (com.tshk.hlthhbbty.data.db.HabitEntity) -> Unit,
+    onWalk: (com.tshk.hlthhbbty.data.db.HabitEntity) -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
     vm: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
@@ -173,12 +174,20 @@ fun HomeScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text(h.habit.title, color = p.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         when {
+                                            h.habit.activity != null && h.done -> Text("Выполнено ✓", color = p.accent, style = MaterialTheme.typography.labelMedium)
+                                            h.habit.activity != null -> Text("Карта, шаги и секундомер", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
+                                            h.habit.healthMetric == "BEDTIME" -> Text("Отметится сама по телефону", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
                                             h.habit.focusMinutes != null && h.done -> Text("Выполнено ✓", color = p.accent, style = MaterialTheme.typography.labelMedium)
                                             h.habit.focusMinutes != null -> Text("Таймер фокуса", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
                                             h.habit.goalPerDay > 1 -> Text("${h.count} из ${h.habit.goalPerDay} раз", color = p.textSecondary, style = MaterialTheme.typography.labelMedium)
                                         }
                                     }
-                                    if (h.habit.focusMinutes != null) {
+                                    if (h.habit.activity != null) {
+                                        GlassChip(if (h.done) "Ещё" else "Начать", leading = "🗺", onClick = { onWalk(h.habit) })
+                                    } else if (h.habit.healthMetric == "BEDTIME") {
+                                        // Автоотметка: только показываем состояние
+                                        HabitCheck(h.count, h.habit.goalPerDay, h.habit.colorIndex, {})
+                                    } else if (h.habit.focusMinutes != null) {
                                         // Привычки с таймером — только кнопка, ведущая в «Фокус»
                                         GlassChip(if (h.done) "Ещё раз" else "Начать", leading = "⏱", onClick = { onFocus(h.habit) })
                                     } else {

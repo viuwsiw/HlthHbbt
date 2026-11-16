@@ -161,17 +161,23 @@ private fun blobsFor(a1: Color, a2: Color, dark: Boolean, black: Boolean): List<
     }
 }
 
-@Composable
-fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, black: Boolean = false, content: @Composable () -> Unit) {
+/** Палитра для выбранных темы и акцента — общая для приложения и виджета. */
+fun buildPalette(dark: Boolean, black: Boolean, accentIndex: Int): LiquidPalette {
     val accent = AccentOptions.getOrElse(accentIndex) { AccentOptions[0] }
-    val (a1, a2) = if (dark) accent.dark else accent.light
+    val isDark = dark || black
+    val (a1, a2) = if (isDark) accent.dark else accent.light
     val base = if (black) BlackPalette else if (dark) DarkPalette else LightPalette
-    val p = base.copy(
+    return base.copy(
         accent = a1,
         accentSecondary = a2,
-        base = backgroundFor(a1, dark, black),
-        blobs = blobsFor(a1, a2, dark, black),
+        base = backgroundFor(a1, isDark, black),
+        blobs = blobsFor(a1, a2, isDark, black),
     )
+}
+
+@Composable
+fun HlthTheme(dark: Boolean = isSystemInDarkTheme(), accentIndex: Int = 0, black: Boolean = false, content: @Composable () -> Unit) {
+    val p = buildPalette(dark, black, accentIndex)
     val scheme = if (dark || black) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.onAccent, secondary = p.accentSecondary,

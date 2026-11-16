@@ -232,34 +232,70 @@ fun HabitEditorScreen(
                 }
                 VSpace(16.dp)
                 GlassCard(Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🗺 Трекер прогулки", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                            Text("Секундомер, шаги и карта маршрута по GPS", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                        }
+                        Switch(
+                            checked = d.activity == HabitKind.ACTIVITY_WALK,
+                            onCheckedChange = { on -> vm.edit { it.copy(activity = if (on) HabitKind.ACTIVITY_WALK else null, focusMinutes = if (on) null else it.focusMinutes) } },
+                            colors = SwitchDefaults.colors(checkedTrackColor = p.accent),
+                        )
+                    }
+                }
+                VSpace(16.dp)
+                GlassCard(Modifier.fillMaxWidth()) {
                     SectionTitle("Таймер фокуса")
                     Text("Запускайте таймер прямо из привычки — по окончании она отметится сама.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                     VSpace(10.dp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         FocusOptions.forEach { m ->
-                            GlassChip(m?.let { "$it мин" } ?: "Нет", selected = d.focusMinutes == m, onClick = { vm.edit { it.copy(focusMinutes = m) } })
+                            GlassChip(m?.let { "$it мин" } ?: "Нет", selected = d.focusMinutes == m, onClick = { vm.edit { it.copy(focusMinutes = m, activity = if (m != null) null else it.activity) } })
                         }
                     }
                 }
                 VSpace(16.dp)
                 GlassCard(Modifier.fillMaxWidth()) {
-                    SectionTitle("Автоотметка из Health Connect")
-                    Text("Привычка отметится сама, когда цель будет достигнута.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                    SectionTitle("Автоотметка")
+                    Text("Привычка отметится сама: по шагам и сну из Health Connect или по тому, брали ли вы телефон после отбоя.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                     VSpace(10.dp)
                     GlassSegmented(
-                        listOf("Нет", "Шаги", "Сон"),
-                        when (d.healthMetric) { HabitKind.METRIC_STEPS -> 1; HabitKind.METRIC_SLEEP -> 2; else -> 0 },
+                        listOf("Нет", "Шаги", "Сон", "Отбой"),
+                        when (d.healthMetric) { HabitKind.METRIC_STEPS -> 1; HabitKind.METRIC_SLEEP -> 2; HabitKind.METRIC_BEDTIME -> 3; else -> 0 },
                         { i ->
                             vm.edit {
                                 when (i) {
                                     1 -> it.copy(healthMetric = HabitKind.METRIC_STEPS, healthTarget = 8000)
                                     2 -> it.copy(healthMetric = HabitKind.METRIC_SLEEP, healthTarget = 7 * 60)
+                                    3 -> it.copy(healthMetric = HabitKind.METRIC_BEDTIME, healthTarget = 23 * 60)
                                     else -> it.copy(healthMetric = null, healthTarget = null)
                                 }
                             }
                         },
                     )
-                    if (d.healthMetric != null) {
+                    if (d.healthMetric == HabitKind.METRIC_BEDTIME) {
+                        val target = d.healthTarget ?: (23 * 60)
+                        var usageOk by androidx.compose.runtime.remember { mutableStateOf(vm.hasUsageAccess()) }
+                        androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { usageOk = vm.hasUsageAccess(); onPauseOrDispose {} }
+                        VSpace(12.dp)
+                        Text("Отбой в ${formatMinutesOfDay(target)}", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                        Slider(
+                            value = target.toFloat(),
+                            onValueChange = { v -> vm.edit { it.copy(healthTarget = (v / 15).toInt() * 15) } },
+                            valueRange = (20 * 60f)..(23 * 60 + 45f),
+                            colors = SliderDefaults.colors(thumbColor = color, activeTrackColor = color, inactiveTrackColor = color.copy(alpha = 0.2f)),
+                        )
+                        Text(
+                            "С ${formatMinutesOfDay(target)} галочка стоит. Если разблокировать телефон после ${formatMinutesOfDay(target)} (до 05:00), она снимется.",
+                            style = MaterialTheme.typography.labelSmall, color = p.textSecondary,
+                        )
+                        if (!usageOk) {
+                            VSpace(10.dp)
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
+                            GlassButton("Разрешить доступ к истории использования", { ctx.startActivity(vm.usageAccessIntent()) }, Modifier.fillMaxWidth())
+                        }
+                    } else if (d.healthMetric != null) {
                         val steps = d.healthMetric == HabitKind.METRIC_STEPS
                         val target = d.healthTarget ?: 0
                         VSpace(12.dp)

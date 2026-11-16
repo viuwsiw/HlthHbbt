@@ -42,6 +42,7 @@ class HabitEditorViewModel(private val c: AppContainer, handle: SavedStateHandle
                         reminderMinutes = habit.reminderMinutes, kind = habit.kind,
                         healthMetric = habit.healthMetric, healthTarget = habit.healthTarget,
                         focusMinutes = habit.focusMinutes,
+                        activity = habit.activity,
                     ),
                 )
             } else {
@@ -53,6 +54,9 @@ class HabitEditorViewModel(private val c: AppContainer, handle: SavedStateHandle
             }
         }
     }
+
+    fun hasUsageAccess() = c.bedtime.hasAccess()
+    fun usageAccessIntent() = c.bedtime.accessIntent()
 
     fun edit(transform: (HabitDraft) -> HabitDraft) = _state.update { it.copy(draft = transform(it.draft)) }
 
