@@ -58,17 +58,14 @@ fun MusicSection(
     val context = LocalContext.current
     val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
-    val playback by vm.playback.collectAsStateWithLifecycle()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val mediaAccess by vm.mediaAccess.collectAsStateWithLifecycle()
     SpotifyEvents(vm)
 
     val playSpotify: (String) -> Unit = { uri ->
         when {
             !vm.configured -> context.showMessage("Spotify", "Spotify не настроен в этой сборке")
-            !loggedIn -> {
-                context.showMessage("Spotify", "Войдите в Spotify, чтобы слушать музыку прямо в приложении")
-                onOpenIntegrations()
-            }
-            else -> vm.play(contextUri = uri)
+            else -> vm.play(contextUri = uri) // без входа — откроется в приложении Spotify
         }
     }
 
@@ -82,9 +79,12 @@ fun MusicSection(
             )
         }
         VSpace(10.dp)
-        val pb = playback
-        if (loggedIn && pb?.track != null) {
-            MiniPlayer(pb, vm::togglePlay, vm::next, onOpenPlayer)
+        val np = nowPlaying
+        if (np != null) {
+            MiniPlayer(np, vm::togglePlay, vm::next, onOpenPlayer)
+            VSpace(12.dp)
+        } else if (!mediaAccess) {
+            MediaAccessCard(vm)
             VSpace(12.dp)
         }
         // Сетка в две колонки — без горизонтальной прокрутки.
@@ -95,7 +95,7 @@ fun MusicSection(
                     MusicTile(
                         cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },
                         title = pl.title,
-                        subtitle = if (loggedIn) "▶ Spotify" else "Spotify · войти",
+                        subtitle = "▶ Spotify",
                         badgeColor = SpotifyGreen,
                         onClick = { playSpotify(uri) },
                         modifier = m,

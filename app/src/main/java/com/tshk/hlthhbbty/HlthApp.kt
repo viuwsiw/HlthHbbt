@@ -56,6 +56,7 @@ class AppContainer(private val context: Context) {
     val reminders = ReminderScheduler(context)
     val updates = com.tshk.hlthhbbty.update.UpdateRepository(context)
     val updater = com.tshk.hlthhbbty.update.UpdateController(updates, scope)
+    val media = com.tshk.hlthhbbty.media.MediaRepository(context)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
 
     fun start() {

@@ -34,12 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.tshk.hlthhbbty.spotify.Playback
 import com.tshk.hlthhbbty.ui.glass.GlassCard
 import com.tshk.hlthhbbty.ui.glass.GlassIconButton
 import com.tshk.hlthhbbty.ui.theme.Liquid
@@ -52,24 +52,25 @@ import kotlinx.coroutines.delay
 val SpotifyGreen = Color(0xFF1DB954)
 
 @Composable
-fun CoverImage(url: String?, size: Dp, corner: Dp = 12.dp, modifier: Modifier = Modifier) {
+fun CoverImage(url: String?, size: Dp, corner: Dp = 12.dp, modifier: Modifier = Modifier, bitmap: android.graphics.Bitmap? = null) {
     Box(
         modifier.size(size).clip(RoundedCornerShape(corner)).background(SpotifyGreen.copy(alpha = 0.2f)),
         contentAlignment = Alignment.Center,
     ) {
-        if (url != null) AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else if (url != null) AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Icon(Icons.Rounded.MusicNote, null, tint = SpotifyGreen, modifier = Modifier.size(size * 0.45f))
     }
 }
 
-/** Позиция трека, плавно обновляемая между запросами к API. */
+/** Позиция трека, плавно обновляемая между событиями плеера. */
 @Composable
-fun rememberPosition(pb: Playback?): Long {
-    var pos by remember { mutableLongStateOf(pb?.positionNow() ?: 0L) }
-    LaunchedEffect(pb) {
+fun rememberPosition(np: NowPlaying?): Long {
+    var pos by remember { mutableLongStateOf(np?.positionNow() ?: 0L) }
+    LaunchedEffect(np?.key) {
         while (true) {
-            pos = pb?.positionNow() ?: 0L
-            if (pb?.isPlaying != true) break
+            pos = np?.positionNow() ?: 0L
+            if (np?.isPlaying != true) break
             delay(500)
         }
     }
@@ -77,25 +78,24 @@ fun rememberPosition(pb: Playback?): Long {
 }
 
 @Composable
-fun MiniPlayer(pb: Playback, onToggle: () -> Unit, onNext: () -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun MiniPlayer(np: NowPlaying, onToggle: () -> Unit, onNext: () -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val p = Liquid.palette
-    val track = pb.track ?: return
-    val pos = rememberPosition(pb)
+    val pos = rememberPosition(np)
     GlassCard(modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp), onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CoverImage(track.image, 52.dp)
+            CoverImage(np.artUrl, 52.dp, bitmap = np.artBitmap)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(track.name, style = MaterialTheme.typography.titleSmall, color = p.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(track.artists, style = MaterialTheme.typography.labelMedium, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(np.title, style = MaterialTheme.typography.titleSmall, color = p.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOf(np.artist, np.appName).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            GlassIconButton(if (pb.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Пауза/Играть", onToggle, size = 42.dp, tint = SpotifyGreen)
+            GlassIconButton(if (np.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Пауза/Играть", onToggle, size = 42.dp, tint = SpotifyGreen)
             Spacer(Modifier.width(8.dp))
             GlassIconButton(Icons.Rounded.SkipNext, "Следующий", onNext, size = 42.dp)
         }
         Spacer(Modifier.height(10.dp))
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(SpotifyGreen.copy(alpha = 0.18f))) {
-            val frac = if (track.durationMs > 0) pos / track.durationMs.toFloat() else 0f
+            val frac = if (np.durationMs > 0) pos / np.durationMs.toFloat() else 0f
             Box(Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(4.dp).clip(RoundedCornerShape(50)).background(SpotifyGreen))
         }
     }
@@ -125,9 +125,49 @@ fun SpotifyEvents(vm: SpotifyViewModel) {
         vm.events.collect { e ->
             when (e) {
                 is SpotifyEvent.OpenUrl -> context.openLogin(e.uri)
+                is SpotifyEvent.OpenInSpotify -> {
+                    if (e.reason != null) context.showSpotifyMessage(e.reason + "\nПлейлист открыт в приложении Spotify — управлять музыкой можно из нашего плеера.")
+                    context.openInSpotify(e.contextUri)
+                }
                 SpotifyEvent.OpenSpotifyApp -> context.openSpotifyApp()
                 is SpotifyEvent.Message -> context.showSpotifyMessage(e.text)
             }
         }
+    }
+}
+
+
+/** Открыть плейлист в приложении Spotify (или в браузере, если его нет). */
+fun Context.openInSpotify(contextUri: String) {
+    val web = "https://open.spotify.com/" + contextUri.removePrefix("spotify:").replace(':', '/')
+    val target = if (isAppInstalled("com.spotify.music")) contextUri else web
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: android.content.ActivityNotFoundException) {
+        openUrl(web)
+    }
+}
+
+/** Карточка-подсказка: включить доступ к медиасессиям для универсального плеера. */
+@Composable
+fun MediaAccessCard(vm: SpotifyViewModel, modifier: Modifier = Modifier) {
+    val p = Liquid.palette
+    val context = androidx.compose.ui.platform.LocalContext.current
+    GlassCard(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("🎛️", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Плеер для любой музыки", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                Text(
+                    "Управляйте Spotify, Яндекс Музыкой и другими прямо отсюда. Включите для HLTH HBTy «Доступ к уведомлениям» — один раз.",
+                    style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        com.tshk.hlthhbbty.ui.glass.GlassButton(
+            "Включить", { context.startActivity(vm.mediaAccessIntent()) }, Modifier.fillMaxWidth(),
+        )
     }
 }

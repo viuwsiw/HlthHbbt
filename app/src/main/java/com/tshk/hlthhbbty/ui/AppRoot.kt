@@ -86,6 +86,11 @@ fun AppRoot(vm: RootViewModel = viewModel(factory = AppViewModelProvider.Factory
             .collectAsStateWithLifecycle(com.tshk.hlthhbbty.data.AppSettings())
         if (settings.bugButton) BugTrackerButton()
         AskNotificationsOnce()
+        val media = (context.applicationContext as com.tshk.hlthhbbty.HlthApp).container.media
+        androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+            media.refresh() // подхватывает выданный «Доступ к уведомлениям»
+            onPauseOrDispose {}
+        }
     }
 }
 

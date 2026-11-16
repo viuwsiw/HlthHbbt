@@ -49,32 +49,35 @@ import com.tshk.hlthhbbty.ui.theme.Liquid
 @Composable
 fun PlayerScreen(onBack: () -> Unit, vm: SpotifyViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val p = Liquid.palette
-    val pb by vm.playback.collectAsStateWithLifecycle()
+    val np by vm.nowPlaying.collectAsStateWithLifecycle()
+    val mediaAccess by vm.mediaAccess.collectAsStateWithLifecycle()
     SpotifyEvents(vm)
-    val track = pb?.track
-    val pos = rememberPosition(pb)
+    val track = np
+    val pos = rememberPosition(np)
     var dragging by remember { mutableStateOf<Float?>(null) }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
         VSpace(12.dp)
-        ScreenHeader("Сейчас играет", onBack, subtitle = pb?.device?.let { "на устройстве: ${it.name}" })
+        ScreenHeader("Сейчас играет", onBack, subtitle = np?.appName)
         VSpace(20.dp)
         GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(20.dp)) {
             if (track == null) {
                 Text("Ничего не играет", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
                 VSpace(6.dp)
                 Text(
-                    "Выберите плейлист на экране интеграций или включите трек в приложении Spotify.",
+                    "Включите музыку в Spotify, Яндекс Музыке или выберите плейлист в «Интеграциях».",
                     style = MaterialTheme.typography.bodyMedium, color = p.textSecondary,
                 )
-                VSpace(14.dp)
-                GlassButton("Играть", { vm.togglePlay() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.PlayArrow)
+                if (!mediaAccess) {
+                    VSpace(14.dp)
+                    MediaAccessCard(vm)
+                }
                 return@GlassCard
             }
-            CoverImage(track.image, 320.dp, 24.dp, Modifier.fillMaxWidth().aspectRatio(1f))
+            CoverImage(track.artUrl, 320.dp, 24.dp, Modifier.fillMaxWidth().aspectRatio(1f), bitmap = track.artBitmap)
             VSpace(18.dp)
-            Text(track.name, style = MaterialTheme.typography.headlineSmall, color = p.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(track.artists, style = MaterialTheme.typography.titleMedium, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.title, style = MaterialTheme.typography.headlineSmall, color = p.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.titleMedium, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             VSpace(10.dp)
             Slider(
                 value = dragging ?: pos.toFloat(),
@@ -89,17 +92,19 @@ fun PlayerScreen(onBack: () -> Unit, vm: SpotifyViewModel = viewModel(factory = 
             }
             VSpace(12.dp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassIconButton(Icons.Rounded.Shuffle, "Перемешать", { vm.shuffle(!(pb?.shuffle ?: false)) }, size = 44.dp,
-                    tint = if (pb?.shuffle == true) SpotifyGreen else p.textSecondary)
+                if (track.shuffle != null) {
+                    GlassIconButton(Icons.Rounded.Shuffle, "Перемешать", { vm.shuffle(!track.shuffle) }, size = 44.dp,
+                        tint = if (track.shuffle) SpotifyGreen else p.textSecondary)
+                } else Spacer(Modifier.width(44.dp))
                 GlassIconButton(Icons.Rounded.SkipPrevious, "Предыдущий", vm::previous, size = 54.dp)
-                GlassIconButton(if (pb?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Играть/Пауза", vm::togglePlay, size = 72.dp, tint = SpotifyGreen)
+                GlassIconButton(if (track.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Играть/Пауза", vm::togglePlay, size = 72.dp, tint = SpotifyGreen)
                 GlassIconButton(Icons.Rounded.SkipNext, "Следующий", vm::next, size = 54.dp)
                 Spacer(Modifier.width(44.dp))
             }
         }
         VSpace(12.dp)
         Text(
-            "Звук воспроизводится через Spotify. Управление требует Spotify Premium.",
+            if (np?.source == PlayerSource.SPOTIFY_API) "Управление через Spotify API требует Premium." else "Управление музыкой через систему Android — работает с любым плеером.",
             style = MaterialTheme.typography.labelSmall, color = p.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -111,6 +116,7 @@ fun SpotifyPlaylistScreen(onBack: () -> Unit, onPlayer: () -> Unit, vm: SpotifyV
     val tracks by vm.tracks.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val pb by vm.playback.collectAsStateWithLifecycle()
+    val np by vm.nowPlaying.collectAsStateWithLifecycle()
     SpotifyEvents(vm)
     val playlist = playlists.firstOrNull { it.id == vm.playlistId }
     val contextUri = "spotify:playlist:${vm.playlistId}"
@@ -124,7 +130,7 @@ fun SpotifyPlaylistScreen(onBack: () -> Unit, onPlayer: () -> Unit, vm: SpotifyV
         item {
             GlassButton("Слушать", { vm.play(contextUri); onPlayer() }, Modifier.fillMaxWidth().padding(top = 6.dp), icon = Icons.Rounded.PlayArrow)
         }
-        pb?.let { item { if (it.track != null) MiniPlayer(it, vm::togglePlay, vm::next, onPlayer) } }
+        np?.let { item { MiniPlayer(it, vm::togglePlay, vm::next, onPlayer) } }
         when (val list = tracks) {
             null -> item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = SpotifyGreen) } }
             else -> {

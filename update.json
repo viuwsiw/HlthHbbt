@@ -1,7 +1,7 @@
 {
-  "versionCode": 13,
-  "versionName": "2.7.1.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=13",
-  "size": 23087236,
-  "changelog": "• Раздел «Музыка для привычек» теперь сеткой — без горизонтальной прокрутки"
+  "versionCode": 14,
+  "versionName": "2.8",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk?v=14",
+  "size": 23103732,
+  "changelog": "• Универсальный плеер: управляйте Spotify, Яндекс Музыкой и другими прямо из приложения — без Premium\n• Если Spotify не дал запустить плейлист, он откроется в приложении Spotify, а плеер подхватит музыку\n• Плейлисты Spotify работают и без входа в аккаунт"
 }

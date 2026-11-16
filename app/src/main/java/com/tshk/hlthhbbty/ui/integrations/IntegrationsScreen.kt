@@ -60,7 +60,8 @@ fun IntegrationsScreen(
     val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
     val user by vm.user.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
-    val playback by vm.playback.collectAsStateWithLifecycle()
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val mediaAccess by vm.mediaAccess.collectAsStateWithLifecycle()
     SpotifyEvents(vm)
 
     LazyColumn(
@@ -69,6 +70,15 @@ fun IntegrationsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item { ScreenHeader("Интеграции", onBack, subtitle = "Музыка и здоровье") }
+
+        // ---------- Сейчас играет (любое приложение) ----------
+        item {
+            val np = nowPlaying
+            when {
+                np != null -> MiniPlayer(np, vm::togglePlay, vm::next, onPlayer)
+                !mediaAccess -> MediaAccessCard(vm)
+            }
+        }
 
         // ---------- Spotify ----------
         item {
@@ -99,14 +109,6 @@ fun IntegrationsScreen(
                 }
             }
             else -> {
-                item {
-                    val pb = playback
-                    if (pb?.track != null) MiniPlayer(pb, vm::togglePlay, vm::next, onPlayer)
-                    else GlassCard(Modifier.fillMaxWidth(), onClick = onPlayer) {
-                        Text("Сейчас ничего не играет", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
-                        Text("Выберите плейлист ниже", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
-                    }
-                }
                 item { SectionTitle("Для привычек") }
                 items(Integrations.playlists.filter { it.service == MusicService.SPOTIFY }, key = { it.url }) { pl ->
                     val id = pl.url.substringAfterLast("/").substringBefore("?")
