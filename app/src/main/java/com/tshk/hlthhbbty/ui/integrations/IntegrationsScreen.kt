@@ -72,18 +72,24 @@ fun IntegrationsScreen(
     ) {
         item { ScreenHeader("Интеграции", onBack, subtitle = "Музыка и здоровье") }
 
-        // ---------- Сейчас играет (любое приложение) ----------
+        // ---------- 1. Плеер (любое приложение на телефоне) ----------
+        item { BlockHeader("🎛️", "Плеер", "Управление музыкой из любого приложения — без входа в аккаунты") }
         item {
             val np = nowPlaying
             when {
                 np != null -> MiniPlayer(np, vm::togglePlay, vm::next, onPlayer)
                 !mediaAccess -> MediaAccessCard(vm)
+                else -> GlassCard(Modifier.fillMaxWidth(), onClick = onPlayer) {
+                    Text("Сейчас ничего не играет", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                    Text("Включите музыку — плеер подхватит её сам", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                }
             }
         }
 
-        // ---------- Spotify ----------
+        // ---------- 2. Spotify (API, вход в аккаунт) ----------
+        item { BlockDivider() }
         item {
-            SectionTitle("Spotify", Modifier.padding(top = 8.dp)) {
+            BlockHeader("🟢", "Spotify", "Вход в аккаунт: ваши плейлисты и запуск музыки без переключения в Spotify") {
                 if (loggedIn) when {
                     user != null -> GlassChip(if (user!!.isPremium) "Premium" else "Free", leading = "🟢")
                     profileError != null -> GlassChip("Нет доступа", leading = "🔴")
@@ -169,16 +175,9 @@ fun IntegrationsScreen(
             }
         }
 
-        // ---------- Яндекс Музыка ----------
-        item {
-            SectionTitle("Яндекс Музыка", Modifier.padding(top = 8.dp))
-        }
-        item {
-            Text(
-                "У Яндекс Музыки нет публичного API, поэтому плейлисты открываются в приложении Яндекса.",
-                style = MaterialTheme.typography.bodySmall, color = p.textSecondary, modifier = Modifier.padding(horizontal = 4.dp),
-            )
-        }
+        // ---------- 3. Яндекс Музыка ----------
+        item { BlockDivider() }
+        item { BlockHeader("🟡", "Яндекс Музыка", "Публичного API нет: плейлисты открываются в приложении Яндекса, управлять можно из «Плеера»") }
         items(Integrations.playlists.filter { it.service == MusicService.YANDEX }, key = { it.url }) { pl ->
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp), onClick = { context.openUrl(pl.url) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -194,7 +193,8 @@ fun IntegrationsScreen(
         }
 
         // ---------- Здоровье ----------
-        item { SectionTitle("Здоровье", Modifier.padding(top = 8.dp)) }
+        item { BlockDivider() }
+        item { BlockHeader("❤️", "Здоровье", null) }
         item {
             GlassCard(Modifier.fillMaxWidth(), onClick = onSettings) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -230,4 +230,27 @@ private fun PlaylistRow(
             com.tshk.hlthhbbty.ui.glass.GlassIconButton(Icons.Rounded.PlayArrow, "Играть", onPlay, size = 42.dp, tint = SpotifyGreen)
         }
     }
+}
+
+
+@Composable
+private fun BlockHeader(emoji: String, title: String, subtitle: String?, action: @Composable () -> Unit = {}) {
+    val p = Liquid.palette
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(emoji, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = p.textPrimary)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+        }
+        action()
+    }
+}
+
+@Composable
+private fun BlockDivider() {
+    androidx.compose.material3.HorizontalDivider(
+        Modifier.padding(vertical = 6.dp),
+        color = Liquid.palette.textSecondary.copy(alpha = 0.18f),
+    )
 }

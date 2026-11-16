@@ -6,6 +6,16 @@ data class ChangelogEntry(val version: String, val title: String, val items: Lis
 object Changelog {
     val entries = listOf(
         ChangelogEntry(
+            "1.0.2", "Музыка и навигация",
+            listOf(
+                "Интеграции разделены на блоки: Плеер, Spotify, Яндекс Музыка",
+                "После входа в Spotify на главной — только Spotify",
+                "Плейлисты Spotify запускаются в фоне, без переключения в приложение Spotify",
+                "Плеер в нижней панели: потяните её вверх, когда играет музыка",
+                "Свайпы влево/вправо между разделами, пока нижняя панель скрыта",
+            ),
+        ),
+        ChangelogEntry(
             "1.0.1.1", "Исправления Spotify",
             listOf(
                 "При входе в Spotify можно выбрать другой аккаунт («Это не вы?»)",

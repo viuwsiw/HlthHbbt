@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -169,5 +171,29 @@ fun MediaAccessCard(vm: SpotifyViewModel, modifier: Modifier = Modifier) {
         com.tshk.hlthhbbty.ui.glass.GlassButton(
             "Включить", { context.startActivity(vm.mediaAccessIntent()) }, Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** Компактный плеер для раскрытой нижней панели. */
+@Composable
+fun BarPlayer(np: NowPlaying, onToggle: () -> Unit, onNext: () -> Unit, onOpen: () -> Unit) {
+    val p = Liquid.palette
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onOpen).padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverImage(np.artUrl, 40.dp, 10.dp, bitmap = np.artBitmap)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(np.title, style = MaterialTheme.typography.titleSmall, color = p.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOf(np.artist, np.appName).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        androidx.compose.material3.IconButton(onClick = onToggle) {
+            Icon(if (np.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Пауза/Играть", tint = p.accent)
+        }
+        androidx.compose.material3.IconButton(onClick = onNext) {
+            Icon(Icons.Rounded.SkipNext, "Следующий", tint = p.textPrimary)
+        }
     }
 }

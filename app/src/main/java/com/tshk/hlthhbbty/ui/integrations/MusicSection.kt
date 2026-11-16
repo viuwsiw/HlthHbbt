@@ -57,6 +57,9 @@ fun MusicSection(
     val p = Liquid.palette
     val context = LocalContext.current
     val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
+    val spotifyUser by vm.user.collectAsStateWithLifecycle()
+    // Вошли в Spotify — на главной показываем только Spotify.
+    val spotifyOnly = loggedIn && spotifyUser != null
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val mediaAccess by vm.mediaAccess.collectAsStateWithLifecycle()
@@ -102,7 +105,7 @@ fun MusicSection(
                     )
                 }
             }
-            if (loggedIn) playlists.take(4).forEach { pl ->
+            if (loggedIn) playlists.take(if (spotifyOnly) 8 else 4).forEach { pl ->
                 add { m ->
                     MusicTile(
                         cover = { CoverImage(pl.image, 140.dp, 16.dp, it) },
@@ -114,7 +117,7 @@ fun MusicSection(
                     )
                 }
             }
-            Integrations.playlists.filter { it.service == MusicService.YANDEX }.forEach { pl ->
+            if (!spotifyOnly) Integrations.playlists.filter { it.service == MusicService.YANDEX }.forEach { pl ->
                 add { m ->
                     MusicTile(
                         cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },

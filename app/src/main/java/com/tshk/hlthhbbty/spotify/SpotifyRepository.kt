@@ -25,7 +25,7 @@ sealed interface PlayResult {
 
 /** Состояние Spotify на уровне процесса: вход, профиль, плейлисты и текущее воспроизведение. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SpotifyRepository(context: Context, scope: CoroutineScope) {
+class SpotifyRepository(private val context: Context, scope: CoroutineScope) {
     val auth = SpotifyAuth(context)
     val api = SpotifyApi(auth)
 
@@ -83,14 +83,20 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
 
     suspend fun tracks(playlistId: String): List<SpotifyTrack> = runCatching { api.playlistTracks(playlistId) }.getOrElse { emptyList() }
 
+    /**
+     * Запуск без переключения в приложение Spotify:
+     * 1) играем на активном устройстве; 2) если его нет — на доступном (телефон в приоритете);
+     * 3) если Spotify не запущен — будим его в фоне медиакнопкой и ждём, пока телефон появится в устройствах.
+     */
     suspend fun play(contextUri: String? = null, trackUri: String? = null): PlayResult {
         val result = try {
             api.play(contextUri, trackUri)
             PlayResult.Ok
         } catch (e: SpotifyException.NoActiveDevice) {
-            // Пробуем разбудить любое доступное устройство, предпочитая телефон.
-            val device = runCatching { api.devices() }.getOrDefault(emptyList())
-                .sortedByDescending { it.type.equals("Smartphone", true) }.firstOrNull()
+            val device = findDevice() ?: run {
+                wakeSpotifyInBackground()
+                waitForDevice()
+            }
             if (device == null) PlayResult.OpenSpotify
             else runCatching { api.play(contextUri, trackUri, device.id); PlayResult.Ok }
                 .getOrElse { PlayResult.Error(it.message ?: "Ошибка") }
@@ -100,6 +106,31 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
         refreshSoon()
         return result
     }
+
+    private suspend fun findDevice(): SpotifyDevice? =
+        runCatching { api.devices() }.getOrDefault(emptyList())
+            .sortedByDescending { it.type.equals("Smartphone", true) }.firstOrNull()
+
+    private suspend fun waitForDevice(): SpotifyDevice? {
+        repeat(10) {
+            delay(700)
+            findDevice()?.let { return it }
+        }
+        return null
+    }
+
+    /** Отправляет приложению Spotify медиакнопку Play: оно запускается в фоне, без открытия окна. */
+    private fun wakeSpotifyInBackground() {
+        if (!isSpotifyInstalled()) return
+        listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP).forEach { action ->
+            val intent = android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON)
+                .setPackage(SPOTIFY_PACKAGE)
+                .putExtra(android.content.Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(action, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+            runCatching { context.sendBroadcast(intent) }
+        }
+    }
+
+    private fun isSpotifyInstalled() = runCatching { context.packageManager.getPackageInfo(SPOTIFY_PACKAGE, 0); true }.getOrDefault(false)
 
     suspend fun togglePlay(): PlayResult {
         val pb = playback.value
@@ -137,6 +168,10 @@ class SpotifyRepository(context: Context, scope: CoroutineScope) {
     }
 
     fun consumeError() { _lastError.value = null }
+
+    companion object {
+        const val SPOTIFY_PACKAGE = "com.spotify.music"
+    }
 
     suspend fun logout() {
         auth.logout()

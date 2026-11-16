@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -135,7 +137,7 @@ private fun MainScaffold() {
         start = 20.dp,
         end = 20.dp,
         top = status.calculateTopPadding() + 16.dp,
-        bottom = navBars.calculateBottomPadding() + 112.dp,
+        bottom = navBars.calculateBottomPadding() + 150.dp,
     )
 
     // Панель видна, только когда список долистан до конца — не перекрывает кнопки.
@@ -159,8 +161,34 @@ private fun MainScaffold() {
         }
     }
 
+    // Плеер в нижней панели — только пока что-то играет.
+    val music: com.tshk.hlthhbbty.ui.integrations.SpotifyViewModel =
+        viewModel(key = "bottom_bar_player", factory = AppViewModelProvider.Factory)
+    val nowPlaying by music.nowPlaying.collectAsStateWithLifecycle()
+
+    // Свайпы между разделами — только пока нижняя панель скрыта.
+    val swipeEnabled = tabIndex >= 0 && !atEnd.value
+    val currentTab by androidx.compose.runtime.rememberUpdatedState(tabIndex)
+
     androidx.compose.runtime.CompositionLocalProvider(com.tshk.hlthhbbty.ui.glass.LocalBottomBarAtEnd provides atEnd) {
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(swipeEnabled) {
+                if (!swipeEnabled) return@pointerInput
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onDragEnd = {
+                        val t = currentTab
+                        // Палец влево — следующий раздел, вправо — предыдущий.
+                        // С «Главной» назад некуда, с «Профиля» — вперёд.
+                        if (total < -140f && t in 0 until tabs.lastIndex) nav.switchTab(tabs[t + 1])
+                        else if (total > 140f && t > 0) nav.switchTab(tabs[t - 1])
+                    },
+                ) { _, dx -> total += dx }
+            }
+    ) {
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
@@ -246,10 +274,14 @@ private fun MainScaffold() {
                 .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
         ) {
+            val np = nowPlaying
             GlassBottomBar(
                 items = navItems,
                 selectedIndex = tabIndex.coerceAtLeast(0),
                 onSelect = { nav.switchTab(tabs[it]) },
+                player = if (np != null && np.isPlaying) {
+                    { com.tshk.hlthhbbty.ui.integrations.BarPlayer(np, music::togglePlay, music::next) { nav.navigate(Routes.PLAYER) } }
+                } else null,
             )
         }
     }
