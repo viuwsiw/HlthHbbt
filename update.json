@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "2.3",
+  "versionCode": 8,
+  "versionName": "2.4",
   "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/HEAD/dist/HLTH-HBTy.apk",
   "size": 23054464,
-  "changelog": "• Автообновление из GitHub\n• Плеер Spotify в разделе «Интеграции»\n• Плашка BETA TEST"
+  "changelog": "• Spotify подключён: вход, плейлисты и плеер в «Интеграциях»"
 }
