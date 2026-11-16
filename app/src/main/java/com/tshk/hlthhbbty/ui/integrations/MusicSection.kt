@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -84,39 +87,52 @@ fun MusicSection(
             MiniPlayer(pb, vm::togglePlay, vm::next, onOpenPlayer)
             VSpace(12.dp)
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(Integrations.playlists.filter { it.service == MusicService.SPOTIFY }, key = { it.url }) { pl ->
+        // Сетка в две колонки — без горизонтальной прокрутки.
+        val tiles = buildList<@Composable (Modifier) -> Unit> {
+            Integrations.playlists.filter { it.service == MusicService.SPOTIFY }.forEach { pl ->
                 val uri = "spotify:playlist:" + pl.url.substringAfterLast("/").substringBefore("?")
-                MusicTile(
-                    cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },
-                    title = pl.title,
-                    subtitle = if (loggedIn) "▶ Spotify" else "Spotify · войти",
-                    playing = pb?.isPlaying == true && pb.track != null,
-                    badgeColor = SpotifyGreen,
-                    onClick = { playSpotify(uri) },
-                )
-            }
-            if (loggedIn) {
-                items(playlists.take(12), key = { it.id }) { pl ->
+                add { m ->
                     MusicTile(
-                        cover = { m -> CoverImage(pl.image, 140.dp, 16.dp, m) },
-                        title = pl.name,
-                        subtitle = "▶ Мой плейлист",
-                        playing = false,
+                        cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },
+                        title = pl.title,
+                        subtitle = if (loggedIn) "▶ Spotify" else "Spotify · войти",
                         badgeColor = SpotifyGreen,
-                        onClick = { playSpotify(pl.uri) },
+                        onClick = { playSpotify(uri) },
+                        modifier = m,
                     )
                 }
             }
-            items(Integrations.playlists.filter { it.service == MusicService.YANDEX }, key = { it.url }) { pl ->
-                MusicTile(
-                    cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },
-                    title = pl.title,
-                    subtitle = "Яндекс Музыка ↗",
-                    playing = false,
-                    badgeColor = Color(0xFFFFCC00),
-                    onClick = { context.openUrl(pl.url) },
-                )
+            if (loggedIn) playlists.take(4).forEach { pl ->
+                add { m ->
+                    MusicTile(
+                        cover = { CoverImage(pl.image, 140.dp, 16.dp, it) },
+                        title = pl.name,
+                        subtitle = "▶ Мой плейлист",
+                        badgeColor = SpotifyGreen,
+                        onClick = { playSpotify(pl.uri) },
+                        modifier = m,
+                    )
+                }
+            }
+            Integrations.playlists.filter { it.service == MusicService.YANDEX }.forEach { pl ->
+                add { m ->
+                    MusicTile(
+                        cover = { Image(painterResource(pl.cover), null, it, contentScale = ContentScale.Crop) },
+                        title = pl.title,
+                        subtitle = "Яндекс Музыка ↗",
+                        badgeColor = Color(0xFFFFCC00),
+                        onClick = { context.openUrl(pl.url) },
+                        modifier = m,
+                    )
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            tiles.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { tile -> tile(Modifier.weight(1f)) }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
     }
@@ -127,15 +143,15 @@ private fun MusicTile(
     cover: @Composable (Modifier) -> Unit,
     title: String,
     subtitle: String,
-    playing: Boolean,
     badgeColor: Color,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val p = Liquid.palette
-    GlassSurface(Modifier.width(160.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    GlassSurface(modifier, shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(10.dp)) {
             Box {
-                cover(Modifier.fillMaxWidth().size(140.dp).clip(RoundedCornerShape(16.dp)))
+                cover(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)))
                 Box(
                     Modifier.align(Alignment.BottomEnd).padding(8.dp).size(12.dp).clip(RoundedCornerShape(50)).background(badgeColor)
                 )
