@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class ConversationItem(val row: ConversationRow, val unread: Boolean)
+data class ConversationItem(val row: ConversationRow, val unread: Boolean, val pinned: Boolean = false, val title: String = "@" + row.peer, val avatar: String = "")
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatsViewModel(private val c: AppContainer) : ViewModel() {
@@ -40,10 +40,44 @@ class ChatsViewModel(private val c: AppContainer) : ViewModel() {
 
     val conversations: StateFlow<List<ConversationItem>> = account.flatMapLatest { acc ->
         if (acc == null) flowOf(emptyList())
-        else m.conversations(acc.username).map { rows ->
-            rows.map { ConversationItem(it, !it.lastOutgoing && it.maxServerId > m.store.lastRead(it.peer)) }
+        else kotlinx.coroutines.flow.combine(m.conversations(acc.username), m.pins, m.groups) { rows, pins, groups ->
+            val known = rows.map { it.peer }.toSet()
+            // Группы без сообщений тоже показываем
+            val empty = groups.values.filter { it.conv !in known }.map { g ->
+                ConversationRow(g.conv, "Группа создана", 0L, false, 0L)
+            }
+            (rows + empty).map { r ->
+                val g = if (com.tshk.hlthhbbty.messenger.isGroup(r.peer)) groups[com.tshk.hlthhbbty.messenger.groupId(r.peer)] else null
+                ConversationItem(
+                    r, !r.lastOutgoing && r.maxServerId > m.store.lastRead(r.peer), r.peer in pins,
+                    title = g?.name ?: "@" + r.peer, avatar = if (g != null) "" else (avatars[r.peer] ?: ""),
+                )
+            }.sortedWith(compareByDescending<ConversationItem> { it.pinned }.thenByDescending { it.row.lastAt })
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Аватары и имена собеседников (из контактов и профилей). */
+    private val avatars = HashMap<String, String>()
+
+    fun preview(peer: String) = account.value?.let { m.chat(it.username, peer) } ?: flowOf(emptyList())
+    fun togglePin(peer: String) = m.togglePin(peer)
+    fun delete(peer: String, forAll: Boolean) = viewModelScope.launch {
+        runCatching { m.clearConversation(peer, forAll) }.onFailure { _error.value = it.message }
+    }
+    fun canDeleteForAll(peer: String): Boolean = m.group(peer)?.let { it.owner == m.me } ?: (peer != m.me)
+
+    private val _groupBusy = MutableStateFlow(false)
+    val groupBusy: StateFlow<Boolean> = _groupBusy.asStateFlow()
+    private val _groupError = MutableStateFlow<String?>(null)
+    val groupError: StateFlow<String?> = _groupError.asStateFlow()
+    fun createGroup(name: String, members: List<String>, onDone: (String) -> Unit) = viewModelScope.launch {
+        _groupBusy.value = true
+        _groupError.value = null
+        runCatching { m.createGroup(name, members) }
+            .onSuccess { onDone(it.conv) }
+            .onFailure { _groupError.value = it.message }
+        _groupBusy.value = false
+    }
 
     val query = MutableStateFlow("")
     private val _results = MutableStateFlow<List<RemoteUser>>(emptyList())
@@ -70,7 +104,13 @@ class ChatsViewModel(private val c: AppContainer) : ViewModel() {
                 _searching.value = false
             }
         }
-        viewModelScope.launch { if (account.value != null) runCatching { m.sync() } }
+        viewModelScope.launch {
+            if (account.value != null) {
+                runCatching { m.refreshGroups() }
+                runCatching { m.sync() }
+                runCatching { m.contacts() }.getOrNull()?.forEach { avatars[it.username] = it.avatar }
+            }
+        }
         // Статусы собеседников из списка чатов
         viewModelScope.launch {
             conversations.map { list -> list.map { it.row.peer } }.distinctUntilChanged().collect { peers ->
@@ -133,7 +173,7 @@ class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : Vie
 
     init {
         m.openChat = peer
-        if (peer != m.me) viewModelScope.launch {
+        if (peer != m.me && !com.tshk.hlthhbbty.messenger.isGroup(peer)) viewModelScope.launch {
             _profile.value = runCatching { m.profile(peer) }.getOrNull()
             _safety.value = runCatching { m.safetyCode(peer) }.getOrNull()
         }
@@ -146,6 +186,20 @@ class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : Vie
 
     private val _uploading = MutableStateFlow(false)
     val uploading: StateFlow<Boolean> = _uploading.asStateFlow()
+
+    val isGroup get() = com.tshk.hlthhbbty.messenger.isGroup(peer)
+    val group = m.groups.map { it[com.tshk.hlthhbbty.messenger.groupId(peer)] }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, m.group(peer))
+    val peerRead = m.peerRead.map { it[peer] ?: 0L }.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+    fun sendVoice(file: java.io.File, durationMs: Long) = viewModelScope.launch {
+        _error.value = null
+        _uploading.value = true
+        try { m.sendVoice(peer, file, durationMs) } catch (e: ApiException) { _error.value = e.message } catch (e: Exception) { _error.value = "Не удалось отправить голосовое" }
+        _uploading.value = false
+    }
+
+    fun markListened(msg: ChatMessageEntity) = m.markListened(msg)
 
     fun send(text: String) = viewModelScope.launch {
         _error.value = null
@@ -172,6 +226,13 @@ class UserProfileViewModel(private val c: AppContainer, handle: SavedStateHandle
     val m = c.messenger
     val presence = m.presence
     val username: String = handle.get<String>("username").orEmpty()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val shared: StateFlow<List<ChatMessageEntity>> = m.store.account.flatMapLatest { acc ->
+        if (acc == null) flowOf(emptyList()) else m.chat(acc.username, username)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    suspend fun mediaFile(json: String): java.io.File? = runCatching { m.mediaFile(org.json.JSONObject(json)) }.getOrNull()
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile: StateFlow<RemoteProfile?> = _profile.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
@@ -200,9 +261,42 @@ class PrivacyViewModel(private val c: AppContainer) : ViewModel() {
 
     init { m.me?.let { m.store.loadPrivacy(it) } }
 
+    val live = m.store.liveNotifications
+    fun setLive(on: Boolean) = m.store.setLiveNotifications(on)
+
     fun update(transform: (Privacy) -> Privacy) = viewModelScope.launch {
         _saving.value = true
         runCatching { m.savePrivacy(transform(privacy.value)) }
         _saving.value = false
     }
+}
+
+
+class GroupInfoViewModel(private val c: AppContainer, handle: SavedStateHandle) : ViewModel() {
+    val m = c.messenger
+    val id: Long = handle.get<String>("id")?.toLongOrNull() ?: 0L
+    val peer get() = "g:$id"
+    val me get() = m.me
+    val group = m.groups.map { it[id] }.stateIn(viewModelScope, SharingStarted.Eagerly, m.groups.value[id])
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val shared: StateFlow<List<ChatMessageEntity>> = m.store.account.flatMapLatest { acc ->
+        if (acc == null) flowOf(emptyList()) else m.chat(acc.username, "g:$id")
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    init { viewModelScope.launch { runCatching { m.refreshGroups() } } }
+
+    private fun act(block: suspend () -> Unit) = viewModelScope.launch {
+        _error.value = null
+        runCatching { block() }.onFailure { _error.value = it.message }
+    }
+    fun rename(name: String) = act { m.renameGroup(id, name) }
+    fun add(username: String) = act { m.addGroupMember(id, username) }
+    fun remove(username: String) = act { m.removeGroupMember(id, username) }
+    fun leave(onDone: () -> Unit) = act { m.removeGroupMember(id, m.me ?: return@act); onDone() }
+
+    suspend fun mediaFile(json: String): java.io.File? = runCatching { m.mediaFile(org.json.JSONObject(json)) }.getOrNull()
 }

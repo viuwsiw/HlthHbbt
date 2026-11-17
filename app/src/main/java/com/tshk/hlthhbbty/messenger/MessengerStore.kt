@@ -105,6 +105,47 @@ class MessengerStore(context: Context) {
     val myStatus: StateFlow<String> = _myStatus.asStateFlow()
     fun setMyStatus(s: String) { prefs.edit().putString("my_status", s).apply(); _myStatus.value = s }
 
+    private fun acc() = _account.value?.username.orEmpty()
+
+    // ---------- закреплённые чаты ----------
+    private val _pins = MutableStateFlow<Set<String>>(emptySet())
+    val pins: StateFlow<Set<String>> = _pins.asStateFlow()
+    fun loadPins() { _pins.value = prefs.getStringSet("pins_${acc()}", emptySet()).orEmpty().toSet() }
+    fun setPins(set: Set<String>) { prefs.edit().putStringSet("pins_${acc()}", set).apply(); _pins.value = set }
+
+    // ---------- «прочитано» собеседником: диалог → до какого сообщения ----------
+    private val _peerRead = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val peerRead: StateFlow<Map<String, Long>> = _peerRead.asStateFlow()
+    fun loadPeerRead() {
+        val j = runCatching { JSONObject(prefs.getString("peer_read_${acc()}", "{}")!!) }.getOrElse { JSONObject() }
+        _peerRead.value = j.keys().asSequence().associateWith { j.optLong(it) }
+    }
+    fun setPeerRead(conv: String, upTo: Long) {
+        if (upTo <= (_peerRead.value[conv] ?: 0)) return
+        val m = _peerRead.value + (conv to upTo)
+        _peerRead.value = m
+        prefs.edit().putString("peer_read_${acc()}", JSONObject(m as Map<*, *>).toString()).apply()
+    }
+
+    /** Последняя отправленная на сервер отметка «прочитано» по диалогу. */
+    fun sentRead(conv: String): Long = prefs.getLong("sent_read_${acc()}_$conv", 0)
+    fun setSentRead(conv: String, id: Long) = prefs.edit().putLong("sent_read_${acc()}_$conv", id).apply()
+
+    // ---------- группы (кэш) ----------
+    var groupsJson: String
+        get() = prefs.getString("groups_${acc()}", "[]") ?: "[]"
+        set(v) { prefs.edit().putString("groups_${acc()}", v).apply() }
+
+    /** Какое фото профиля уже загружено на сервер (путь + время изменения). */
+    var uploadedAvatar: String
+        get() = prefs.getString("uploaded_avatar_${acc()}", "") ?: ""
+        set(v) { prefs.edit().putString("uploaded_avatar_${acc()}", v).apply() }
+
+    /** Мгновенные уведомления: держать соединение с сервером в фоне. */
+    private val _liveNotifications = MutableStateFlow(prefs.getBoolean("live_notifications", true))
+    val liveNotifications: StateFlow<Boolean> = _liveNotifications.asStateFlow()
+    fun setLiveNotifications(v: Boolean) { prefs.edit().putBoolean("live_notifications", v).apply(); _liveNotifications.value = v }
+
     /** Последнее сообщение, о котором уже показано уведомление. */
     var notifiedId: Long
         get() = prefs.getLong("notified_${_account.value?.username}", 0)

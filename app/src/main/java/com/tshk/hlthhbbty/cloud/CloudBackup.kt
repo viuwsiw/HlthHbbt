@@ -186,6 +186,7 @@ class CloudBackup(
                 .put("achievements", p.achievements.name).put("habits", p.habits.name).put("water", p.water.name)
                 .put("nowPlaying", p.nowPlaying.name))
             .put("myStatus", m.store.myStatus.value)
+            .put("pins", JSONArray(m.store.pins.value.toList()))
             .put("data", backupRepo.exportJson(user.id))
             .put("walks", JSONArray(walks.map { w ->
                 JSONObject().put("startedAt", w.startedAt).put("durationMs", w.durationMs).put("distanceM", w.distanceM).put("steps", w.steps)
@@ -268,6 +269,7 @@ class CloudBackup(
             ))
         }
         j.optString("myStatus").takeIf { it == "ONLINE" || it == "DND" }?.let { m.store.setMyStatus(it) }
+        j.optJSONArray("pins")?.let { arr -> m.store.setPins((0 until arr.length()).map { arr.getString(it) }.toSet()) }
         j.optJSONObject("data")?.let { backupRepo.importJson(userId, it) }
         j.optJSONArray("walks")?.let { arr ->
             for (i in 0 until arr.length()) {

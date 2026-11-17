@@ -30,6 +30,9 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.foundation.layout.heightIn
 import com.tshk.hlthhbbty.messenger.MAX_CHARS
 import androidx.compose.material3.Icon
@@ -62,7 +65,7 @@ import com.tshk.hlthhbbty.ui.glass.glass
 import com.tshk.hlthhbbty.ui.theme.Liquid
 
 @Composable
-fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
+fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, onOpenGroup: (Long) -> Unit = {}, vm: ChatViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val p = Liquid.palette
     val messages by vm.messages.collectAsStateWithLifecycle()
     val profile by vm.profile.collectAsStateWithLifecycle()
@@ -82,6 +85,31 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
     val pickFile = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) { vm.sendMedia(uri, text); text = "" } }
+    val group by vm.group.collectAsStateWithLifecycle()
+    val peerRead by vm.peerRead.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val recorder = androidx.compose.runtime.remember { VoiceRecorder(context) }
+    var recording by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var recElapsed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) recording = recorder.start() }
+    fun startRecording() {
+        val has = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (has) recording = recorder.start() else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+    fun stopRecording(send: Boolean) {
+        recording = false
+        if (send) recorder.stop()?.let { (f, d) -> vm.sendVoice(f, d) } else recorder.cancel()
+    }
+    LaunchedEffect(recording) {
+        while (recording) {
+            recElapsed = System.currentTimeMillis() - recorder.startedAt
+            if (recElapsed >= com.tshk.hlthhbbty.messenger.MAX_VOICE_MS) { stopRecording(true); break }
+            kotlinx.coroutines.delay(200)
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (recording) recorder.cancel() } }
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex) }
 
@@ -102,6 +130,19 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
                         Text("Видно только вам · зашифровано", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
                     }
                 }
+            } else if (vm.isGroup) {
+                Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onOpenGroup(com.tshk.hlthhbbty.messenger.groupId(vm.peer)) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Brush.linearGradient(listOf(p.accentSecondary, p.accent))), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Groups, null, tint = p.onAccent, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(group?.name ?: "Группа", style = MaterialTheme.typography.titleMedium, color = p.textPrimary, maxLines = 1)
+                        Text((group?.members?.size ?: 0).let { "$it из 5 участников" }, style = MaterialTheme.typography.labelSmall, color = p.textSecondary, maxLines = 1)
+                    }
+                }
+                GlassIconButton(Icons.Rounded.Lock, "Шифрование", { showSecurity = true }, tint = p.accent)
             } else {
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onOpenUser(vm.peer) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box {
@@ -134,12 +175,13 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
             item {
                 Text(
                     if (self) "⭐ Избранное: заметки, фото, видео и файлы. Зашифровано вашим ключом — не видно никому, даже серверу."
+                    else if (vm.isGroup) "🔒 Групповой чат зашифрован: каждое сообщение шифруется отдельно для каждого участника."
                     else "🔒 Сообщения защищены сквозным шифрованием. Прочитать их можете только вы и @${vm.peer}.",
                     style = MaterialTheme.typography.labelSmall, color = p.textSecondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(8.dp).glass(RoundedCornerShape(14.dp)).padding(10.dp),
                 )
             }
-            items(messages, key = { it.clientId }) { m -> Bubble(m, vm) }
+            items(messages, key = { it.clientId }) { m -> Bubble(m, vm, peerRead) }
         }
         if (error != null) {
             Text(error!!, color = p.danger, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
@@ -156,7 +198,17 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
             Text("${text.length} / $MAX_CHARS", style = MaterialTheme.typography.labelSmall,
                 color = if (text.length >= MAX_CHARS) p.danger else p.textSecondary, modifier = Modifier.padding(horizontal = 24.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (recording) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            GlassIconButton(Icons.Rounded.Close, "Отмена", { stopRecording(false) }, size = 48.dp, tint = p.danger)
+            Spacer(Modifier.width(10.dp))
+            Row(Modifier.weight(1f).glass(RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.danger))
+                Spacer(Modifier.width(10.dp))
+                Text("Запись  ${formatMs(recElapsed)} / 5:00", style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
+            }
+            Spacer(Modifier.width(10.dp))
+            GlassIconButton(Icons.AutoMirrored.Rounded.Send, "Отправить голосовое", { stopRecording(true) }, size = 52.dp, tint = p.accent)
+        } else Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
                 GlassIconButton(Icons.Rounded.AttachFile, "Вложение", { attachMenu = true }, size = 48.dp)
                 androidx.compose.material3.DropdownMenu(attachMenu, { attachMenu = false }) {
@@ -176,7 +228,8 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
             Spacer(Modifier.width(8.dp))
             GlassTextField(text, { text = it.take(MAX_CHARS) }, "Сообщение", Modifier.weight(1f), singleLine = false, imeAction = ImeAction.Default)
             Spacer(Modifier.width(8.dp))
-            GlassIconButton(Icons.AutoMirrored.Rounded.Send, "Отправить", {
+            if (text.isBlank()) GlassIconButton(Icons.Rounded.Mic, "Голосовое", { startRecording() }, size = 52.dp, tint = p.accent)
+            else GlassIconButton(Icons.AutoMirrored.Rounded.Send, "Отправить", {
                 if (text.isNotBlank()) { vm.send(text); text = "" }
             }, size = 52.dp, tint = p.accent)
         }
@@ -188,16 +241,18 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
                 "Сообщения шифруются на вашем телефоне ключом собеседника (X25519 + AES-256-GCM). Сервер хранит только шифротекст и не может его прочитать.",
                 style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
             )
+            if (!vm.isGroup) {
             VSpace(12.dp)
             Text("Код безопасности", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
             Text(safety ?: "—", style = MaterialTheme.typography.headlineSmall, color = p.accent)
             Text("Сравните код с собеседником при встрече: если совпадает — ключи не подменены.", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+            }
         }
     }
 }
 
 @Composable
-private fun Bubble(m: ChatMessageEntity, vm: ChatViewModel) {
+private fun Bubble(m: ChatMessageEntity, vm: ChatViewModel, peerRead: Long) {
     val p = Liquid.palette
     val shape = RoundedCornerShape(
         topStart = 20.dp, topEnd = 20.dp,
@@ -214,10 +269,19 @@ private fun Bubble(m: ChatMessageEntity, vm: ChatViewModel) {
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            if (m.kind == "media" && m.media != null) MediaContent(m.media, m.outgoing, vm)
+            if (vm.isGroup && !m.outgoing && m.sender.isNotBlank()) {
+                Text("@${m.sender}", style = MaterialTheme.typography.labelMedium, color = p.accent, modifier = Modifier.align(Alignment.Start))
+            }
+            if (m.kind == "media" && m.media != null) MediaContent(m, vm)
             if (m.text.isNotBlank()) Text(m.text, style = MaterialTheme.typography.bodyMedium, color = if (m.outgoing) p.onAccent else if (m.readable) p.textPrimary else p.textSecondary)
+            val receipt = when {
+                !m.outgoing || vm.isSelf -> ""
+                m.serverId == 0L -> "  ⏳"
+                m.serverId <= peerRead -> "  ✓✓"
+                else -> "  ✓"
+            }
             Text(
-                chatTime(m.createdAt) + if (m.outgoing) (if (m.serverId > 0) "  ✓" else "  ⏳") else "",
+                chatTime(m.createdAt) + receipt,
                 style = MaterialTheme.typography.labelSmall,
                 color = if (m.outgoing) p.onAccent.copy(alpha = 0.75f) else p.textSecondary,
             )
@@ -228,8 +292,16 @@ private fun Bubble(m: ChatMessageEntity, vm: ChatViewModel) {
 
 /** Вложение: фото/GIF — превью, видео и файлы — карточка; открывается системным приложением. */
 @Composable
-private fun MediaContent(json: String, outgoing: Boolean, vm: ChatViewModel) {
+private fun MediaContent(msg: ChatMessageEntity, vm: ChatViewModel) {
+    val json = msg.media ?: return
+    val outgoing = msg.outgoing
     val p = Liquid.palette
+    val voiceMeta = androidx.compose.runtime.remember(json) { runCatching { org.json.JSONObject(json) }.getOrNull() }
+    if (voiceMeta?.optBoolean("voice") == true) {
+        VoiceBubble(msg, voiceMeta, { vm.mediaFile(json) }, { vm.markListened(msg) })
+        return
+    }
+    var viewer by androidx.compose.runtime.remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val meta = androidx.compose.runtime.remember(json) { runCatching { org.json.JSONObject(json) }.getOrNull() } ?: return
     val mime = meta.optString("mime")
@@ -239,6 +311,7 @@ private fun MediaContent(json: String, outgoing: Boolean, vm: ChatViewModel) {
     val color = if (outgoing) p.onAccent else p.textPrimary
     fun open() {
         val f = file ?: return
+        if (mime.startsWith("image/") || mime.startsWith("video/")) { viewer = true; return }
         val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".updates", f)
         runCatching {
             context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime)
@@ -271,4 +344,5 @@ private fun MediaContent(json: String, outgoing: Boolean, vm: ChatViewModel) {
             }
         }
     }
+    if (viewer) file?.let { f -> MediaViewer(f, mime) { viewer = false } }
 }

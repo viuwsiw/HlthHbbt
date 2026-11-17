@@ -54,6 +54,20 @@ fun UserAvatar(avatar: String?, name: String, size: Dp, modifier: Modifier = Mod
                 val idx = avatar.removePrefix("preset:").toIntOrNull()?.coerceIn(PresetAvatars.indices) ?: 0
                 Image(painterResource(PresetAvatars[idx]), name, mod, contentScale = ContentScale.Crop)
             }
+            avatar?.startsWith("remote:") == true -> {
+                // Фото другого пользователя с сервера: "remote:<логин>:<версия>"
+                val parts = avatar.split(':')
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val api = (ctx.applicationContext as com.tshk.hlthhbbty.HlthApp).container.messenger.api
+                val request = androidx.compose.runtime.remember(avatar) {
+                    coil.request.ImageRequest.Builder(ctx)
+                        .data(api.avatarUrl(parts.getOrElse(1) { "" }) + "?v=" + parts.getOrElse(2) { "0" })
+                        .addHeader("Authorization", "Bearer ${api.authToken().orEmpty()}")
+                        .crossfade(true)
+                        .build()
+                }
+                AsyncImage(model = request, contentDescription = name, modifier = mod, contentScale = ContentScale.Crop)
+            }
             avatar?.startsWith("file:") == true -> AsyncImage(
                 model = File(avatar.removePrefix("file:")),
                 contentDescription = name,

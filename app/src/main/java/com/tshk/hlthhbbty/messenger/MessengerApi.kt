@@ -35,7 +35,22 @@ data class RemoteProfile(
     val manualStatus: String? = null,
 )
 
-data class RemoteMessage(val id: Long, val from: String, val to: String, val ciphertext: String, val clientId: String, val createdAt: Long)
+data class RemoteMessage(val id: Long, val from: String, val to: String, val ciphertext: String, val clientId: String, val createdAt: Long, val group: Long = 0)
+
+data class MessagesPage(val messages: List<RemoteMessage>, val cursor: Long, val more: Boolean)
+
+data class GroupMember(val username: String, val displayName: String, val avatar: String, val publicKey: String?)
+
+/** Групповой чат (до 5 участников). Ключ диалога — "g:<id>". */
+data class GroupInfo(val id: Long, val name: String, val owner: String, val members: List<GroupMember>) {
+    val conv get() = "g:$id"
+}
+
+data class ReadReceipt(val conv: String, val by: String, val upTo: Long)
+
+/** "photo:<ts>" с сервера → "remote:<логин>:<ts>": аватар загружается по ссылке с авторизацией. */
+fun remoteAvatar(username: String, avatar: String): String =
+    if (avatar.startsWith("photo:")) "remote:$username:${avatar.removePrefix("photo:")}" else avatar
 
 /** HTTP-клиент сервера мессенджера. */
 class MessengerApi(private val baseUrl: () -> String, private val token: () -> String?) {
@@ -153,7 +168,7 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
     suspend fun profile(username: String): RemoteProfile {
         val j = call("GET", "/users/" + URLEncoder.encode(username, "UTF-8"))
         return RemoteProfile(
-            j.getString("username"), j.optString("displayName"), j.optString("avatar"), j.optString("bio"),
+            j.getString("username"), j.optString("displayName"), remoteAvatar(j.getString("username"), j.optString("avatar")), j.optString("bio"),
             j.optLong("createdAt"), j.optJSONObject("fields") ?: JSONObject(),
             j.optString("publicKey").takeIf { it.isNotBlank() }, j.optBoolean("isContact"), j.optBoolean("isSelf"),
             parsePresence(j), j.optString("manualStatus").takeIf { it.isNotBlank() },
@@ -180,10 +195,55 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
         return j.getLong("id") to j.getLong("createdAt")
     }
 
-    suspend fun messages(since: Long): List<RemoteMessage> {
-        val arr = call("GET", "/messages?since=$since").optJSONArray("messages") ?: JSONArray()
-        return (0 until arr.length()).map { parseMessage(arr.getJSONObject(it)) }
+    suspend fun messages(since: Long): MessagesPage {
+        val j = call("GET", "/messages?since=$since")
+        val arr = j.optJSONArray("messages") ?: JSONArray()
+        val list = (0 until arr.length()).map { parseMessage(arr.getJSONObject(it)) }
+        val cursor = if (j.has("cursor")) j.optLong("cursor") else (list.maxOfOrNull { it.id } ?: since)
+        return MessagesPage(list, cursor, if (j.has("more")) j.optBoolean("more") else list.size >= 500)
     }
+
+    // ---------- группы ----------
+    suspend fun groups(): List<GroupInfo> {
+        val arr = call("GET", "/groups").optJSONArray("groups") ?: JSONArray()
+        return (0 until arr.length()).map { parseGroup(arr.getJSONObject(it)) }
+    }
+    suspend fun createGroup(name: String, members: List<String>): GroupInfo =
+        parseGroup(call("POST", "/groups", JSONObject().put("name", name).put("members", JSONArray(members))))
+    suspend fun renameGroup(id: Long, name: String) = call("PUT", "/groups/$id", JSONObject().put("name", name))
+    suspend fun addGroupMember(id: Long, username: String) = call("POST", "/groups/$id/members", JSONObject().put("username", username))
+    suspend fun removeGroupMember(id: Long, username: String) = call("DELETE", "/groups/$id/members/$username")
+    suspend fun sendGroup(id: Long, clientId: String, cts: Map<String, String>, mediaIds: List<String>): Pair<Long, Long> {
+        val j = call("POST", "/groups/$id/messages", JSONObject().put("clientId", clientId).put("cts", JSONObject(cts as Map<*, *>)).put("mediaIds", JSONArray(mediaIds)))
+        return j.getLong("id") to j.getLong("createdAt")
+    }
+
+    // ---------- прочитано / прослушано / удаление ----------
+    suspend fun read(conv: String, upTo: Long) = call("POST", "/read", JSONObject().put("conv", conv).put("upTo", upTo))
+    suspend fun listened(id: Long) = call("POST", "/messages/$id/listened")
+    suspend fun receipts(): Pair<List<ReadReceipt>, List<Long>> {
+        val j = call("GET", "/receipts")
+        val r = j.optJSONArray("reads") ?: JSONArray()
+        val l = j.optJSONArray("listened") ?: JSONArray()
+        return (0 until r.length()).map { r.getJSONObject(it).let { o -> ReadReceipt(o.optString("conv"), o.optString("by"), o.optLong("upTo")) } } to
+            (0 until l.length()).map { l.getLong(it) }
+    }
+    suspend fun clearConversation(conv: String, all: Boolean) = call("DELETE", "/conversations/" + URLEncoder.encode(conv, "UTF-8") + if (all) "?all=1" else "")
+
+    // ---------- фото профиля ----------
+    suspend fun putAvatar(jpeg: ByteArray): String = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url(baseUrl().trimEnd('/') + "/v1/me/avatar")
+            .header("Authorization", "Bearer ${token()}")
+            .put(jpeg.toRequestBody("image/jpeg".toMediaType())).build()
+        http.newCall(req).execute().use { r ->
+            val obj = runCatching { JSONObject(r.body?.string().orEmpty()) }.getOrElse { JSONObject() }
+            if (!r.isSuccessful) throw ApiException(r.code, obj.optString("error"), obj.optString("message").ifBlank { "Не удалось загрузить фото" })
+            obj.optString("avatar")
+        }
+    }
+    suspend fun deleteAvatar() = call("DELETE", "/me/avatar")
+    fun avatarUrl(username: String): String = baseUrl().trimEnd('/') + "/v1/users/" + URLEncoder.encode(username, "UTF-8") + "/avatar"
+    fun authToken(): String? = token()
 
     fun wsUrl(): String? {
         val base = baseUrl().trimEnd('/')
@@ -195,7 +255,7 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
     private fun JSONArray?.users(): List<RemoteUser> =
         if (this == null) emptyList() else (0 until length()).map {
             val o = getJSONObject(it)
-            RemoteUser(o.getString("username"), o.optString("displayName"), o.optString("avatar"), parsePresence(o))
+            RemoteUser(o.getString("username"), o.optString("displayName"), remoteAvatar(o.getString("username"), o.optString("avatar")), parsePresence(o))
         }
 
     companion object {
@@ -207,6 +267,16 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
 
         fun parseMessage(o: JSONObject) = RemoteMessage(
             o.getLong("id"), o.getString("from"), o.getString("to"), o.getString("ciphertext"), o.getString("clientId"), o.getLong("createdAt"),
+            o.optLong("group"),
         )
+
+        fun parseGroup(o: JSONObject): GroupInfo {
+            val arr = o.optJSONArray("members") ?: JSONArray()
+            return GroupInfo(o.getLong("id"), o.optString("name"), o.optString("owner"), (0 until arr.length()).map {
+                val m = arr.getJSONObject(it)
+                val un = m.getString("username")
+                GroupMember(un, m.optString("displayName"), remoteAvatar(un, m.optString("avatar")), m.optString("publicKey").takeIf { k -> k.isNotBlank() })
+            })
+        }
     }
 }

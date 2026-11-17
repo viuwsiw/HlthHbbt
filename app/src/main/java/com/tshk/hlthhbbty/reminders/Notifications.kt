@@ -100,7 +100,7 @@ object Notifications {
     }
 
     @android.annotation.SuppressLint("MissingPermission")
-    fun showChat(context: Context, peer: String, text: String) {
+    fun showChat(context: Context, peer: String, text: String, title: String = "@$peer", sender: String = peer) {
         if (!canPost(context)) return
         val open = PendingIntent.getActivity(
             context, peer.hashCode(),
@@ -112,9 +112,16 @@ object Notifications {
         )
         val n = NotificationCompat.Builder(context, CHANNEL_CHAT)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("@$peer")
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentTitle(title)
+            .setContentText(if (peer.startsWith("g:")) "@$sender: $text" else text)
+            .setStyle(
+                NotificationCompat.MessagingStyle(androidx.core.app.Person.Builder().setName("Вы").build())
+                    .setConversationTitle(if (peer.startsWith("g:")) title else null)
+                    .setGroupConversation(peer.startsWith("g:"))
+                    .addMessage(text, System.currentTimeMillis(), androidx.core.app.Person.Builder().setName(if (peer.startsWith("g:")) "@$sender" else title).build())
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentIntent(open)
             .setAutoCancel(true)

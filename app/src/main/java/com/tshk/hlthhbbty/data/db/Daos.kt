@@ -143,7 +143,7 @@ interface ChatDao {
 
     @Query(
         """
-        SELECT peer, text AS lastText, createdAt AS lastAt, outgoing AS lastOutgoing, serverId AS maxServerId
+        SELECT peer, text AS lastText, createdAt AS lastAt, outgoing AS lastOutgoing, serverId AS maxServerId, kind AS lastKind, media AS lastMedia, sender AS lastSender
         FROM chat_messages c WHERE owner = :owner AND createdAt = (
             SELECT MAX(createdAt) FROM chat_messages WHERE owner = :owner AND peer = c.peer)
         GROUP BY peer ORDER BY lastAt DESC
@@ -162,6 +162,18 @@ interface ChatDao {
 
     @Query("DELETE FROM chat_messages WHERE owner = :owner")
     suspend fun deleteAll(owner: String)
+
+    @Query("DELETE FROM chat_messages WHERE owner = :owner AND peer = :peer")
+    suspend fun deleteConversation(owner: String, peer: String)
+
+    @Query("DELETE FROM chat_messages WHERE owner = :owner AND peer = :peer AND serverId > 0 AND serverId <= :upTo")
+    suspend fun deleteUpTo(owner: String, peer: String, upTo: Long)
+
+    @Query("UPDATE chat_messages SET listened = 1 WHERE owner = :owner AND serverId IN (:ids)")
+    suspend fun markListened(owner: String, ids: List<Long>)
+
+    @Query("SELECT * FROM chat_messages WHERE owner = :owner AND clientId = :clientId")
+    suspend fun byClientId(owner: String, clientId: String): ChatMessageEntity?
 }
 
 data class PeerCount(val peer: String, val n: Int)

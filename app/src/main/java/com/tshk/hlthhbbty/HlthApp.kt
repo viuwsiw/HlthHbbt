@@ -101,8 +101,16 @@ class AppContainer(private val context: Context) {
         messenger.onPrivacyChanged = { backupSoon() }
         scope.launch { runCatching { auth.migrateLocalAccounts(auth.currentUserId.first()) } }
         com.tshk.hlthhbbty.messenger.MessengerSyncWorker.schedule(context)
+        // Мгновенные уведомления: фоновое соединение, пока вошли в мессенджер.
         scope.launch {
-            messenger.incoming.collect { ev -> if (ev != null) Notifications.showChat(context, ev.peer, ev.text) }
+            kotlinx.coroutines.flow.combine(messenger.store.account, messenger.store.liveNotifications) { a, on -> a != null && on }
+                .collect { on ->
+                    if (on) com.tshk.hlthhbbty.messenger.MessengerLinkService.start(context)
+                    else com.tshk.hlthhbbty.messenger.MessengerLinkService.stop(context)
+                }
+        }
+        scope.launch {
+            messenger.incoming.collect { ev -> Notifications.showChat(context, ev.peer, ev.text, ev.title, ev.sender) }
         }
         com.tshk.hlthhbbty.update.UpdateCheckWorker.schedule(context)
         bedtime.schedule()

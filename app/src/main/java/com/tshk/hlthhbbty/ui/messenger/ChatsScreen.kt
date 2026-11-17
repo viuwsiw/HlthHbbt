@@ -23,6 +23,8 @@ import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.GroupAdd
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,6 +88,10 @@ fun ChatsScreen(
     val conflict by vm.conflict.collectAsStateWithLifecycle()
     val myStatus by vm.myStatus.collectAsStateWithLifecycle()
     var statusPicker by rememberSaveable { mutableStateOf(false) }
+    var previewPeer by rememberSaveable { mutableStateOf<String?>(null) }
+    var newGroup by rememberSaveable { mutableStateOf(false) }
+    val groupBusy by vm.groupBusy.collectAsStateWithLifecycle()
+    val groupError by vm.groupError.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     ReportScrollEnd(listState)
     if (account != null) MessengerPresence(vm.m)
@@ -138,7 +144,11 @@ fun ChatsScreen(
             account == null -> item { LinkCard(localUsername, busy, error, onLink = vm::link) }
             else -> {
                 item {
-                    GlassTextField(query, { vm.query.value = it }, "Поиск по логину", Modifier.appear(1), leadingIcon = Icons.Rounded.Search)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.appear(1)) {
+                        GlassTextField(query, { vm.query.value = it }, "Поиск по логину", Modifier.weight(1f), leadingIcon = Icons.Rounded.Search)
+                        Spacer(Modifier.width(8.dp))
+                        com.tshk.hlthhbbty.ui.glass.GlassIconButton(Icons.Rounded.GroupAdd, "Новая группа", { newGroup = true }, size = 52.dp, tint = p.accent)
+                    }
                 }
                 if (query.isNotBlank()) {
                     if (searching) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.accent) } }
@@ -157,17 +167,46 @@ fun ChatsScreen(
                         item { Hint("Пока нет переписок. Найдите друга по логину и откройте его страницу.") }
                     }
                     itemsIndexed(others, key = { _, c -> "c_" + c.row.peer }) { i, c ->
+                        val group = com.tshk.hlthhbbty.messenger.isGroup(c.row.peer)
+                        val voice = c.row.lastMedia?.contains("\"voice\":true") == true
+                        val body = when {
+                            voice -> "🎤 Голосовое"
+                            c.row.lastKind == "media" -> "📎 " + c.row.lastText.ifBlank { "Вложение" }
+                            else -> c.row.lastText
+                        }
+                        val who = when {
+                            c.row.lastOutgoing -> "Вы: "
+                            group && c.row.lastSender.isNotBlank() -> "@${c.row.lastSender}: "
+                            else -> ""
+                        }
                         PersonRow(
-                            avatar = "", name = "@" + c.row.peer,
-                            subtitle = (if (c.row.lastOutgoing) "Вы: " else "") + c.row.lastText.ifBlank { "📎 Вложение" },
-                            time = chatTime(c.row.lastAt), unread = c.unread, modifier = Modifier.appear(i + 2),
-                            status = presence[c.row.peer]?.status,
+                            avatar = c.avatar, name = (if (group) "👥 " else "") + c.title,
+                            subtitle = who + body,
+                            time = if (c.row.lastAt > 0) chatTime(c.row.lastAt) else null, unread = c.unread, modifier = Modifier.appear(i + 2),
+                            status = if (group) null else presence[c.row.peer]?.status,
+                            pinned = c.pinned,
+                            onLongClick = { previewPeer = c.row.peer },
                         ) { onOpenChat(c.row.peer) }
                     }
                 }
             }
         }
     }
+    previewPeer?.let { peer ->
+        val msgs by androidx.compose.runtime.remember(peer) { vm.preview(peer) }.collectAsStateWithLifecycle(emptyList())
+        val item = conversations.firstOrNull { it.row.peer == peer }
+        ChatPreviewDialog(
+            title = item?.title ?: "@$peer", messages = msgs, pinned = item?.pinned == true,
+            canDeleteForAll = vm.canDeleteForAll(peer),
+            onOpen = { previewPeer = null; onOpenChat(peer) },
+            onPin = { vm.togglePin(peer); previewPeer = null },
+            onDelete = { all -> vm.delete(peer, all); previewPeer = null },
+            onDismiss = { previewPeer = null },
+        )
+    }
+    if (newGroup) NewGroupDialog(groupBusy, groupError, onCreate = { name, members ->
+        vm.createGroup(name, members) { conv -> newGroup = false; onOpenChat(conv) }
+    }, onDismiss = { newGroup = false })
 }
 
 @Composable
@@ -233,9 +272,20 @@ private fun Hint(text: String) {
 }
 
 @Composable
-fun PersonRow(avatar: String, name: String, subtitle: String, time: String?, unread: Boolean, modifier: Modifier = Modifier, status: String? = null, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun PersonRow(
+    avatar: String, name: String, subtitle: String, time: String?, unread: Boolean, modifier: Modifier = Modifier,
+    status: String? = null, pinned: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit,
+) {
     val p = Liquid.palette
-    GlassCard(modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp), onClick = onClick) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    GlassCard(
+        modifier.fillMaxWidth().clip(com.tshk.hlthhbbty.ui.glass.GlassShape).combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick?.let { lc -> { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); lc() } },
+        ),
+        contentPadding = PaddingValues(12.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box {
                 UserAvatar(avatar.ifBlank { null }, name.removePrefix("@"), 46.dp)
@@ -247,7 +297,10 @@ fun PersonRow(avatar: String, name: String, subtitle: String, time: String?, unr
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (unread) p.textPrimary else p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Column(horizontalAlignment = Alignment.End) {
-                if (time != null) Text(time, style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (pinned) Text("📌", style = MaterialTheme.typography.labelSmall)
+                    if (time != null) Text(time, style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
                 if (unread) {
                     VSpace(4.dp)
                     Box(Modifier.size(10.dp).clip(CircleShape).background(p.accent))

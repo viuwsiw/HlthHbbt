@@ -113,10 +113,12 @@ private object Routes {
     const val CHATS = "chats"
     const val CHAT = "chat/{peer}"
     const val USER = "user/{username}"
+    const val GROUP = "group/{id}"
     const val PRIVACY = "privacy"
     const val ADMIN = "admin"
     fun chat(peer: String) = "chat/$peer"
     fun user(username: String) = "user/$username"
+    fun group(id: Long) = "group/$id"
     const val EDIT_PROFILE = "profile/edit"
     const val CHANGE_PASSWORD = "profile/password"
     const val INTEGRATIONS = "integrations"
@@ -311,10 +313,17 @@ private fun MainScaffold() {
                 )
             }
             composable(Routes.CHAT, arguments = listOf(navArgument("peer") { type = NavType.StringType })) {
-                com.tshk.hlthhbbty.ui.messenger.ChatScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate(Routes.user(it)) })
+                com.tshk.hlthhbbty.ui.messenger.ChatScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate(Routes.user(it)) }, onOpenGroup = { nav.navigate(Routes.group(it)) })
             }
             composable(Routes.USER, arguments = listOf(navArgument("username") { type = NavType.StringType })) {
                 com.tshk.hlthhbbty.ui.messenger.UserProfileScreen(onBack = { nav.popBackStack() }, onMessage = { nav.navigate(Routes.chat(it)) })
+            }
+            composable(Routes.GROUP, arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+                com.tshk.hlthhbbty.ui.messenger.GroupInfoScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenUser = { nav.navigate(Routes.user(it)) },
+                    onLeft = { nav.popBackStack(Routes.CHATS, inclusive = false) },
+                )
             }
             composable(Routes.ADMIN) { com.tshk.hlthhbbty.ui.admin.AdminScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.PRIVACY) {

@@ -56,6 +56,7 @@ fun UserProfileScreen(onBack: () -> Unit, onMessage: (String) -> Unit, vm: UserP
     val profile by vm.profile.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val presenceMap by vm.presence.collectAsStateWithLifecycle()
+    val shared by vm.shared.collectAsStateWithLifecycle()
     MessengerPresence(vm.m)
 
     LazyColumn(
@@ -174,6 +175,7 @@ fun UserProfileScreen(onBack: () -> Unit, onMessage: (String) -> Unit, vm: UserP
                 }
             }
         }
+        if (!u.isSelf) item { SharedContent(shared) { vm.mediaFile(it) } }
     }
 }
 

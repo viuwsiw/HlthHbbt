@@ -32,8 +32,13 @@ enum class LinkState { NOT_LINKED, CONNECTING, ONLINE, OFFLINE }
 const val MAX_CHARS = 5000
 const val MAX_MEDIA_BYTES = 30L * 1024 * 1024
 
-/** Новое входящее сообщение — для уведомления. */
-data class IncomingEvent(val peer: String, val text: String)
+/** Новое входящее сообщение — для уведомления. title — имя чата, sender — автор (для групп). */
+data class IncomingEvent(val peer: String, val text: String, val title: String = "@$peer", val sender: String = peer)
+
+const val MAX_VOICE_MS = 5 * 60_000L
+
+fun isGroup(peer: String) = peer.startsWith("g:")
+fun groupId(peer: String) = peer.removePrefix("g:").toLongOrNull() ?: 0L
 
 /**
  * Мессенджер: аккаунт на сервере, E2E-шифрование, синхронизация, мгновенная доставка по WebSocket.
@@ -53,8 +58,13 @@ class MessengerRepository(
     private val _state = MutableStateFlow(if (store.account.value == null) LinkState.NOT_LINKED else LinkState.OFFLINE)
     val state: StateFlow<LinkState> = _state.asStateFlow()
 
-    /** Входящие сообщения (для уведомлений, пока приложение запущено). */
-    val incoming = MutableStateFlow<IncomingEvent?>(null)
+    /** Входящие сообщения (для уведомлений). Поток без склейки — каждое событие доходит. */
+    val incoming = kotlinx.coroutines.flow.MutableSharedFlow<IncomingEvent>(extraBufferCapacity = 32)
+
+    private val _groups = MutableStateFlow<Map<Long, GroupInfo>>(emptyMap())
+    val groups: StateFlow<Map<Long, GroupInfo>> = _groups.asStateFlow()
+    val pins get() = store.pins
+    val peerRead get() = store.peerRead
     /** Открытый сейчас чат — по нему не показываем уведомления. */
     @Volatile var openChat: String? = null
 
@@ -89,6 +99,7 @@ class MessengerRepository(
         }
         if (acc != null) {
             store.loadPrivacy(acc.username)
+            loadLocalState()
             connect()
             runCatching { sync() }
             runCatching { pushProfile() }
@@ -99,6 +110,7 @@ class MessengerRepository(
     suspend fun onSignedIn(account: MessengerAccount) {
         store.setAccount(account)
         store.loadPrivacy(account.username)
+        loadLocalState()
         _state.value = LinkState.CONNECTING
         scope.launch {
             runCatching { api.putKey(crypto.publicKey(account.username)) }
@@ -139,6 +151,62 @@ class MessengerRepository(
         runCatching { link(username, password, displayName) }
     }
 
+    private fun loadLocalState() {
+        store.loadPins()
+        store.loadPeerRead()
+        _groups.value = runCatching {
+            val arr = JSONArray(store.groupsJson)
+            (0 until arr.length()).map { MessengerApi.parseGroup(arr.getJSONObject(it)) }.associateBy { it.id }
+        }.getOrDefault(emptyMap())
+    }
+
+    suspend fun refreshGroups() {
+        val list = runCatching { api.groups() }.getOrNull() ?: return
+        _groups.value = list.associateBy { it.id }
+        store.groupsJson = JSONArray(list.map { g ->
+            JSONObject().put("id", g.id).put("name", g.name).put("owner", g.owner).put("members", JSONArray(g.members.map { m ->
+                JSONObject().put("username", m.username).put("displayName", m.displayName)
+                    .put("avatar", if (m.avatar.startsWith("remote:")) "photo:" + m.avatar.substringAfterLast(':') else m.avatar)
+                    .put("publicKey", m.publicKey ?: "")
+            }))
+        }).toString()
+    }
+
+    fun group(peer: String): GroupInfo? = if (isGroup(peer)) _groups.value[groupId(peer)] else null
+
+    /** Название чата для списка и уведомлений. */
+    fun chatTitle(peer: String): String = group(peer)?.name ?: "@$peer"
+
+    suspend fun createGroup(name: String, members: List<String>): GroupInfo {
+        val g = api.createGroup(name.trim(), members)
+        refreshGroups()
+        return g
+    }
+
+    suspend fun renameGroup(id: Long, name: String) { api.renameGroup(id, name.trim()); refreshGroups() }
+    suspend fun addGroupMember(id: Long, username: String) { api.addGroupMember(id, username.trim().removePrefix("@").lowercase()); refreshGroups() }
+    suspend fun removeGroupMember(id: Long, username: String) {
+        api.removeGroupMember(id, username)
+        if (username == me) {
+            store.account.value?.let { chatDao.deleteConversation(it.username, "g:$id") }
+            togglePin("g:$id", false)
+        }
+        refreshGroups()
+    }
+
+    fun togglePin(peer: String, pin: Boolean = peer !in store.pins.value) {
+        store.setPins(if (pin) store.pins.value + peer else store.pins.value - peer)
+        onPrivacyChanged?.invoke() // закрепления входят в облачную копию
+    }
+
+    /** Удалить диалог: у себя или у всех участников. */
+    suspend fun clearConversation(peer: String, forAll: Boolean) {
+        val acc = store.account.value ?: return
+        api.clearConversation(peer, forAll)
+        chatDao.deleteConversation(acc.username, peer)
+        togglePin(peer, false)
+    }
+
     suspend fun unlink(logoutRemote: Boolean = true) {
         disconnect()
         if (logoutRemote) api.logout()
@@ -172,6 +240,7 @@ class MessengerRepository(
     /** Отправка: для себя («Избранное») — своим ключом, иначе — ключом собеседника и копия себе. */
     private suspend fun sendPayload(peer: String, text: String, media: JSONObject?) {
         val acc = store.account.value ?: throw ApiException(0, "not_linked", "Мессенджер не подключён")
+        if (isGroup(peer)) return sendGroupPayload(acc.username, peer, text, media)
         val self = peer == acc.username
         val myKey = crypto.publicKey(acc.username)
         val theirKey = if (self) myKey else peerKey(peer, refresh = true)
@@ -181,7 +250,7 @@ class MessengerRepository(
         val now = System.currentTimeMillis()
         val kind = if (media != null) "media" else "text"
         val localMedia = media?.toString()
-        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, now, kind = kind, media = localMedia))
+        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, now, kind = kind, media = localMedia, sender = acc.username))
         throttle()
         val ct = crypto.encrypt(theirKey, payload, acc.username, peer)
         val (id, createdAt) = api.send(
@@ -191,8 +260,60 @@ class MessengerRepository(
             clientId = clientId,
             mediaIds = listOfNotNull(media?.optString("id")),
         )
-        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, createdAt, id, kind = kind, media = localMedia))
+        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, createdAt, id, kind = kind, media = localMedia, sender = acc.username))
         store.setLastRead(peer, id)
+    }
+
+    /** Групповое сообщение: шифруется отдельно ключом каждого участника (и своим). */
+    private suspend fun sendGroupPayload(me: String, peer: String, text: String, media: JSONObject?) {
+        var g = group(peer) ?: run { refreshGroups(); group(peer) } ?: throw ApiException(404, "no_group", "Группа не найдена")
+        val payload = JSONObject().put("v", 1).put("text", text).apply { if (media != null) put("media", media) }.toString()
+        val clientId = UUID.randomUUID().toString()
+        val kind = if (media != null) "media" else "text"
+        val localMedia = media?.toString()
+        chatDao.upsert(ChatMessageEntity(clientId, me, peer, true, text, System.currentTimeMillis(), kind = kind, media = localMedia, sender = me))
+        throttle()
+        var attempt = 0
+        while (true) {
+            val cts = HashMap<String, String>()
+            for (m in g.members) {
+                val key = if (m.username == me) crypto.publicKey(me) else (m.publicKey ?: peerKey(m.username, refresh = true))
+                    ?: throw ApiException(0, "no_key", "@${m.username} ещё не включил шифрование")
+                cts[m.username] = crypto.encrypt(key, payload, me, peer)
+            }
+            try {
+                val (id, createdAt) = api.sendGroup(g.id, clientId, cts, listOfNotNull(media?.optString("id")))
+                chatDao.upsert(ChatMessageEntity(clientId, me, peer, true, text, createdAt, id, kind = kind, media = localMedia, sender = me))
+                store.setLastRead(peer, id)
+                return
+            } catch (e: ApiException) {
+                if (e.error != "members_changed" || attempt++ > 0) throw e
+                refreshGroups()
+                g = group(peer) ?: throw e
+            }
+        }
+    }
+
+    /** Голосовое сообщение (AAC до 5 минут): шифруется как файл, в сообщении — пометка voice и длительность. */
+    suspend fun sendVoice(peer: String, file: java.io.File, durationMs: Long) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val bytes = file.readBytes()
+        if (bytes.size > MAX_MEDIA_BYTES) throw ApiException(413, "file_too_large", "Голосовое больше 30 МБ")
+        val (cipher, key, nonce) = crypto.encryptFile(bytes)
+        val id = api.uploadMedia(cipher)
+        java.io.File(mediaDir, "$id.m4a").writeBytes(bytes)
+        file.delete()
+        val media = JSONObject().put("id", id).put("key", key).put("nonce", nonce).put("mime", "audio/mp4")
+            .put("name", "voice.m4a").put("size", bytes.size).put("voice", true).put("duration", durationMs.coerceAtMost(MAX_VOICE_MS))
+        sendPayload(peer, "", media)
+    }
+
+    /** Входящее голосовое впервые прослушано — отправителю уйдёт «Прослушано». */
+    fun markListened(m: ChatMessageEntity) {
+        if (m.outgoing || m.listened || m.serverId <= 0) return
+        scope.launch {
+            chatDao.markListened(m.owner, listOf(m.serverId))
+            runCatching { api.listened(m.serverId) }
+        }
     }
 
     private val sendTimes = ArrayDeque<Long>()
@@ -268,23 +389,35 @@ class MessengerRepository(
     suspend fun sync(): Int = syncLock.withLock {
         val acc = store.account.value ?: return 0
         var total = 0
+        if (_groups.value.isEmpty()) refreshGroups()
         while (true) {
-            val batch = try { api.messages(store.lastMessageId) } catch (e: ApiException) {
+            val page = try { api.messages(store.lastMessageId) } catch (e: ApiException) {
                 if (e.code == 401) unlink(logoutRemote = false)
                 throw e
             }
-            if (batch.isEmpty()) break
-            batch.forEach { process(acc.username, it) }
-            store.lastMessageId = batch.maxOf { it.id }
-            total += batch.size
-            if (batch.size < 500) break
+            page.messages.forEach { process(acc.username, it) }
+            if (page.cursor > store.lastMessageId) store.lastMessageId = page.cursor
+            total += page.messages.size
+            if (!page.more) break
         }
+        runCatching { applyReceipts(acc.username) }
         total
+    }
+
+    private suspend fun applyReceipts(me: String) {
+        val (reads, listened) = api.receipts()
+        reads.forEach { store.setPeerRead(it.conv, it.upTo) }
+        if (listened.isNotEmpty()) listened.chunked(500).forEach { chatDao.markListened(me, it) }
     }
 
     private suspend fun process(me: String, m: RemoteMessage) {
         val outgoing = m.from == me
-        val peer = if (outgoing) m.to else m.from
+        val peer = when {
+            m.group > 0 -> "g:${m.group}"
+            outgoing -> m.to
+            else -> m.from
+        }
+        if (m.group > 0 && _groups.value[m.group] == null) refreshGroups()
         val payload = crypto.decrypt(me, m.ciphertext, m.from, m.to)?.let { runCatching { JSONObject(it) }.getOrNull() }
         val text = payload?.optString("text")
         val media = payload?.optJSONObject("media")
@@ -294,6 +427,8 @@ class MessengerRepository(
                 text = if (payload == null) "🔒 Не удалось расшифровать (сообщение для другого ключа)" else text.orEmpty(),
                 createdAt = m.createdAt, serverId = m.id, readable = payload != null,
                 kind = if (media != null) "media" else "text", media = media?.toString(),
+                sender = m.from,
+                listened = chatDao.byClientId(me, m.clientId)?.listened ?: false,
             )
         )
         if (outgoing) store.setLastRead(peer, m.id)
@@ -302,14 +437,22 @@ class MessengerRepository(
             store.notifiedId = m.id
             // «Не беспокоить» — без уведомлений
             val preview = when {
+                media?.optBoolean("voice") == true -> "🎤 Голосовое сообщение"
                 media != null -> "📎 " + (text?.takeIf { it.isNotBlank() } ?: media.optString("name", "Вложение"))
                 else -> text ?: "Новое сообщение"
             }
-            if (store.myStatus.value != "DND" && peer != me) incoming.value = IncomingEvent(peer, preview)
+            if (store.myStatus.value != "DND" && peer != me) incoming.tryEmit(IncomingEvent(peer, preview, chatTitle(peer), m.from))
         }
     }
 
-    fun markRead(peer: String, maxServerId: Long) = store.setLastRead(peer, maxServerId)
+    /** Чат открыт и сообщения видны — отмечаем прочитанным (у собеседника появятся две галочки). */
+    fun markRead(peer: String, maxServerId: Long) {
+        store.setLastRead(peer, maxServerId)
+        if (maxServerId > store.sentRead(peer) && peer != me) {
+            store.setSentRead(peer, maxServerId)
+            scope.launch { runCatching { api.read(peer, maxServerId) } }
+        }
+    }
 
     // ---------- WebSocket ----------
 
@@ -335,6 +478,12 @@ class MessengerRepository(
                         val acc = store.account.value ?: return
                         runCatching {
                             val o = JSONObject(text)
+                            when (o.optString("type")) {
+                                "read" -> store.setPeerRead(o.optString("conv"), o.optLong("upTo"))
+                                "listened" -> scope.launch { chatDao.markListened(acc.username, listOf(o.optLong("id"))) }
+                                "cleared" -> scope.launch { chatDao.deleteUpTo(acc.username, o.optString("conv"), o.optLong("upTo")) }
+                                "group" -> scope.launch { refreshGroups() }
+                            }
                             if (o.optString("type") == "presence") {
                                 val name = o.optString("username")
                                 MessengerApi.parsePresence(o)?.let { p -> _presence.value = _presence.value + (name to p) }
@@ -469,14 +618,40 @@ class MessengerRepository(
             JSONObject().put("todayMl", byDay[day] ?: 0).put("goalMl", h.waterGoal)
                 .put("avg7Ml", (0..6).sumOf { byDay[day - it] ?: 0 } / 7)
         }
+        val avatar = syncAvatar(user.avatar)
         api.putProfile(
             JSONObject()
                 .put("displayName", user.displayName)
-                .put("avatar", user.avatar?.takeIf { it.startsWith("preset:") } ?: "")
+                .put("avatar", avatar)
                 .put("bio", p.bio)
                 .put("discoverable", p.discoverable)
                 .put("fields", fields)
         )
+    }
+
+    /** Фото профиля загружается на сервер один раз (и при смене) — его видят собеседники. */
+    private suspend fun syncAvatar(avatar: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        when {
+            avatar?.startsWith("file:") == true -> {
+                val f = java.io.File(avatar.removePrefix("file:"))
+                val key = "${f.absolutePath}:${f.lastModified()}:${f.length()}"
+                if (store.uploadedAvatar != key && f.exists()) {
+                    val jpeg = runCatching {
+                        val src = android.graphics.BitmapFactory.decodeFile(f.absolutePath)
+                        val scale = 512f / maxOf(src.width, src.height)
+                        val bmp = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(src, (src.width * scale).toInt(), (src.height * scale).toInt(), true) else src
+                        java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+                    }.getOrNull()
+                    if (jpeg != null && runCatching { api.putAvatar(jpeg) }.isSuccess) store.uploadedAvatar = key
+                }
+                if (store.uploadedAvatar == key) "photo" else ""
+            }
+            avatar?.startsWith("preset:") == true -> { store.uploadedAvatar = ""; avatar }
+            else -> {
+                if (store.uploadedAvatar.isNotEmpty()) { runCatching { api.deleteAvatar() }; store.uploadedAvatar = "" }
+                ""
+            }
+        }
     }
 
     // ---------- поиск, профили, контакты ----------

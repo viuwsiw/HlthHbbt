@@ -203,6 +203,10 @@ data class ChatMessageEntity(
     @ColumnInfo(defaultValue = "text") val kind: String = "text",
     /** Вложение (JSON: id, key, nonce, mime, name, size) — ключ хранится только на устройстве. */
     val media: String? = null,
+    /** Автор сообщения (важно для групп). */
+    @ColumnInfo(defaultValue = "") val sender: String = "",
+    /** Голосовое прослушано получателем (для исходящих) или мной (для входящих). */
+    @ColumnInfo(defaultValue = "0") val listened: Boolean = false,
 )
 
 data class ConversationRow(
@@ -211,6 +215,9 @@ data class ConversationRow(
     val lastAt: Long,
     val lastOutgoing: Boolean,
     val maxServerId: Long,
+    val lastKind: String = "text",
+    val lastMedia: String? = null,
+    val lastSender: String = "",
 )
 
 data class DayTotal(val epochDay: Long, val total: Int)

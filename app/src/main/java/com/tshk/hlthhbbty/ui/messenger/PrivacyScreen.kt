@@ -84,6 +84,18 @@ fun PrivacyScreen(onBack: () -> Unit, onPreview: (String) -> Unit, vm: PrivacyVi
             VisRow("🎵 Что я слушаю", privacy.nowPlaying) { v -> vm.update { it.copy(nowPlaying = v) } }
         }
         VSpace(14.dp)
+        val live by vm.live.collectAsStateWithLifecycle()
+        GlassCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Мгновенные уведомления", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text("Приложение держит связь с сервером в фоне — сообщения приходят сразу. Выключите, чтобы экономить батарею (тогда проверка раз в 15 минут).",
+                        style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(live, { vm.setLive(it) }, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+        }
+        VSpace(14.dp)
         GlassButton("Посмотреть мою страницу", { linked?.username?.let(onPreview) }, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary)
         VSpace(32.dp)
     }
