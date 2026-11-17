@@ -11,7 +11,9 @@ struct SigningSection: View {
     @State private var prov: Data?
     @State private var provName = ""
     @State private var password = ""
-    @State private var picking: Kind?
+    @State private var showPicker = false
+    /// Что выбираем — не сбрасывается при закрытии окна (раньше сбрасывалось до прихода файла, и он терялся).
+    @State private var pickKind: Kind = .p12
     @State private var busy = false
     @State private var status: String?
 
@@ -58,11 +60,12 @@ struct SigningSection: View {
         }
         .glassCard()
         .task { await load() }
-        .fileImporter(isPresented: Binding(get: { picking != nil }, set: { if !$0 { picking = nil } }),
-                      allowedContentTypes: [.data, .item]) { result in
-            let kind = picking
-            picking = nil
-            guard case .success(let url) = result else { return }
+        .fileImporter(isPresented: $showPicker, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
+            let kind: Kind? = pickKind
+            guard case .success(let urls) = result, let url = urls.first else {
+                if case .failure(let e) = result { status = e.localizedDescription }
+                return
+            }
             let ok = url.startAccessingSecurityScopedResource()
             defer { if ok { url.stopAccessingSecurityScopedResource() } }
             guard let d = try? Data(contentsOf: url) else { status = "Не удалось прочитать файл"; return }
@@ -81,7 +84,7 @@ struct SigningSection: View {
     }
 
     private func fileRow(_ title: String, _ name: String, _ kind: Kind) -> some View {
-        Button { picking = kind } label: {
+        Button { pickKind = kind; showPicker = true } label: {
             HStack {
                 Image(systemName: name.isEmpty ? "doc.badge.plus" : "checkmark.seal.fill").foregroundStyle(name.isEmpty ? p.text2 : .green)
                 Text(name.isEmpty ? "Выбрать \(title)" : name).foregroundStyle(p.text).lineLimit(1)

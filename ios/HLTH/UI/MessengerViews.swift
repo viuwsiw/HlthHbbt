@@ -46,6 +46,9 @@ struct ChatsView: View {
     @State private var results: [RemoteUser] = []
     @State private var contacts: [RemoteUser] = []
     @State private var searching = false
+    @State private var newGroup = false
+    @State private var openPeer: String?
+    @State private var confirmDelete: (String, Bool)?
 
     var body: some View {
         Screen(title: "Мессенджер") {
@@ -87,28 +90,19 @@ struct ChatsView: View {
 
                 if !m.conversations.isEmpty { SectionTitle("Диалоги") }
                 ForEach(m.conversations) { c in
-                    NavigationLink { ChatView(peer: c.peer) } label: {
-                        let n = m.unread(c.peer)
-                        HStack(spacing: 14) {
-                            ZStack(alignment: .bottomTrailing) {
-                                AvatarView(avatar: contacts.first { $0.username == c.peer }?.avatar, name: c.peer, size: 50)
-                                StatusDot(status: m.presence[c.peer]?.status)
+                    NavigationLink { ChatView(peer: c.peer) } label: { conversationRow(c) }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button { m.togglePin(c.peer) } label: {
+                                Label(m.pins.contains(c.peer) ? "Открепить" : "Закрепить", systemImage: m.pins.contains(c.peer) ? "pin.slash" : "pin")
                             }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(contacts.first { $0.username == c.peer }?.displayName.nonEmpty ?? "@\(c.peer)").font(.headline).foregroundStyle(p.text).lineLimit(1)
-                                Text((c.last.outgoing ? "Вы: " : "") + (c.last.media != nil ? "📎 " : "") + (c.last.text.nonEmpty ?? c.last.media?.name ?? ""))
-                                    .font(.caption).foregroundStyle(p.text2).lineLimit(1)
+                            Button(role: .destructive) { confirmDelete = (c.peer, false) } label: { Label("Удалить у себя", systemImage: "trash") }
+                            if canDeleteForAll(c.peer) {
+                                Button(role: .destructive) { confirmDelete = (c.peer, true) } label: { Label("Удалить у всех", systemImage: "trash.fill") }
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text(timeLabel(c.last.createdAt)).font(.caption2).foregroundStyle(p.text2)
-                                if n > 0 {
-                                    Text("\(n)").font(.caption2.bold()).foregroundStyle(p.onAccent)
-                                        .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(p.accent))
-                                }
-                            }
-                        }.glassCard(12)
-                    }.buttonStyle(.plain)
+                        } preview: {
+                            ChatPreview(peer: c.peer).environmentObject(m).environment(\.palette, p)
+                        }
                 }
 
                 let others = contacts.filter { u in !m.conversations.contains { $0.peer == u.username } }
@@ -128,6 +122,22 @@ struct ChatsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { PrivacyView() } label: { Image(systemName: "hand.raised.fill") }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { newGroup = true } label: { Image(systemName: "person.3.fill") }
+            }
+        }
+        .sheet(isPresented: $newGroup) { NewGroupSheet { conv in openPeer = conv }.glassSheet() }
+        .navigationDestination(item: $openPeer) { ChatView(peer: $0) }
+        .confirmationDialog(confirmDelete?.1 == true ? "Удалить переписку у всех?" : "Удалить переписку у себя?",
+                            isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {
+            Button("Удалить", role: .destructive) {
+                if let (peer, all) = confirmDelete {
+                    Task { do { try await m.clearConversation(peer, forAll: all) } catch { app.show(error.localizedDescription) } }
+                }
+                confirmDelete = nil
+            }
+        } message: {
+            Text(confirmDelete?.1 == true ? "Сообщения исчезнут у вас и у собеседника и удалятся с сервера." : "Переписка исчезнет только у вас, у собеседника останется.")
         }
         .searchable(text: $query, prompt: "Поиск по логину")
         .textInputAutocapitalization(.never)
@@ -150,6 +160,46 @@ struct ChatsView: View {
             await m.sync()
         }
         .refreshable { await m.sync() }
+    }
+
+    private func canDeleteForAll(_ peer: String) -> Bool {
+        if let g = m.group(peer) { return g.owner == app.username }
+        return peer != app.username
+    }
+
+    private func conversationRow(_ c: Messenger.Conversation) -> some View {
+        let n = m.unread(c.peer)
+        let g = m.group(c.peer)
+        let contact = contacts.first { $0.username == c.peer }
+        let title = g.map { "👥 " + $0.name } ?? (contact?.displayName.nonEmpty ?? "@\(c.peer)")
+        let who = c.last.outgoing ? "Вы: " : (g != nil && !c.last.sender.isEmpty ? "@\(c.last.sender): " : "")
+        return HStack(spacing: 14) {
+            ZStack(alignment: .bottomTrailing) {
+                if g != nil {
+                    Image(systemName: "person.3.fill").font(.headline).foregroundStyle(p.onAccent)
+                        .frame(width: 50, height: 50).background(Circle().fill(p.gradient))
+                } else {
+                    AvatarView(avatar: contact?.avatar, name: c.peer, size: 50)
+                    StatusDot(status: m.presence[c.peer]?.status)
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline).foregroundStyle(p.text).lineLimit(1)
+                Text(who + previewText(c.last)).font(.caption).foregroundStyle(p.text2).lineLimit(1)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 3) {
+                    if m.pins.contains(c.peer) { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(p.accent) }
+                    if c.last.createdAt > 0 { Text(timeLabel(c.last.createdAt)).font(.caption2).foregroundStyle(p.text2) }
+                }
+                if n > 0 {
+                    Text("\(n)").font(.caption2.bold()).foregroundStyle(p.onAccent)
+                        .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(p.accent))
+                }
+            }
+        }
+        .glassCard(12)
     }
 
     private func userRow(_ u: String, _ name: String, _ avatar: String, sub: String) -> some View {
@@ -183,6 +233,9 @@ struct ChatView: View {
     @State private var importing = false
     @State private var profile: RemoteProfile?
     @State private var preview: URL?
+    @State private var viewer: MediaViewerItem?
+    @StateObject private var recorder = VoiceRecorder()
+    private var isGroup: Bool { isGroupConv(peer) }
 
     private var isSelf: Bool { peer == app.username }
 
@@ -214,7 +267,11 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { header }
-            if !isSelf {
+            if isGroup {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { GroupInfoView(id: groupIdOf(peer)) } label: { Image(systemName: "person.3.fill") }
+                }
+            } else if !isSelf {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { UserProfileView(username: peer) } label: {
                         AvatarView(avatar: profile?.avatar, name: profile?.displayName.nonEmpty ?? peer, size: 32)
@@ -224,7 +281,7 @@ struct ChatView: View {
         }
         .onAppear { m.openChat = peer; m.markRead(peer); m.enterMessenger() }
         .onDisappear { if m.openChat == peer { m.openChat = nil }; m.leaveMessenger() }
-        .task { if !isSelf { profile = try? await m.profile(peer) } }
+        .task { if !isSelf && !isGroup { profile = try? await m.profile(peer) } }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task {
@@ -245,12 +302,15 @@ struct ChatView: View {
             Task { await sendMedia(data, mime: mime, name: url.lastPathComponent) }
         }
         .quickLookPreview($preview)
+        .fullScreenCover(item: $viewer) { MediaViewer(item: $0) }
     }
 
     private var header: some View {
         VStack(spacing: 1) {
-            Text(isSelf ? "Избранное" : (profile?.displayName.nonEmpty ?? "@\(peer)")).font(.headline).foregroundStyle(p.text).lineLimit(1)
-            if !isSelf {
+            Text(isSelf ? "Избранное" : (m.group(peer)?.name ?? profile?.displayName.nonEmpty ?? "@\(peer)")).font(.headline).foregroundStyle(p.text).lineLimit(1)
+            if isGroup {
+                Text("\(m.group(peer)?.members.count ?? 0) из 5 участников").font(.caption2).foregroundStyle(p.text2)
+            } else if !isSelf {
                 let pr = m.presence[peer]
                 if let np = pr?.nowPlaying {
                     Text("🎵 \(np.title) — \(np.artist)").font(.caption2).foregroundStyle(p.accent).lineLimit(1)
@@ -269,14 +329,31 @@ struct ChatView: View {
         HStack {
             if msg.outgoing { Spacer(minLength: 50) }
             VStack(alignment: msg.outgoing ? .trailing : .leading, spacing: 4) {
-                if let media = msg.media { MediaContent(media: media) { preview = $0 } }
+                if isGroup && !msg.outgoing && !msg.sender.isEmpty {
+                    Text("@\(msg.sender)").font(.caption.weight(.semibold)).foregroundStyle(p.accent)
+                }
+                if let media = msg.media {
+                    if media.voice { VoiceBubble(msg: msg, media: media) }
+                    else {
+                        MediaContent(media: media) { url in
+                            if media.isImage || media.isVideo { viewer = MediaViewerItem(url: url, isVideo: media.isVideo) } else { preview = url }
+                        }
+                    }
+                }
                 if !msg.text.isEmpty {
                     Text(msg.text).foregroundStyle(msg.outgoing ? p.onAccent : p.text).italic(!msg.readable)
                         .textSelection(.enabled)
                 }
                 HStack(spacing: 4) {
                     Text(timeLabel(msg.createdAt)).font(.system(size: 10))
-                    if msg.outgoing { Image(systemName: msg.serverId == 0 ? "clock" : "checkmark").font(.system(size: 9, weight: .bold)) }
+                    if msg.outgoing && !isSelf {
+                        if msg.serverId == 0 { Image(systemName: "clock").font(.system(size: 9, weight: .bold)) }
+                        else if msg.serverId <= (m.peerRead[peer] ?? 0) {
+                            // Прочитано — две галочки
+                            ZStack { Image(systemName: "checkmark").offset(x: -3); Image(systemName: "checkmark").offset(x: 2) }
+                                .font(.system(size: 9, weight: .bold))
+                        } else { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)) }
+                    }
                 }
                 .foregroundStyle(msg.outgoing ? p.onAccent.opacity(0.75) : p.text2)
             }
@@ -294,6 +371,24 @@ struct ChatView: View {
             if text.count > 4000 {
                 Text("\(text.count)/\(maxChars)").font(.caption2).foregroundStyle(text.count > maxChars ? p.danger : p.text2).padding(.trailing, 24)
             }
+            if recorder.recording {
+                HStack(spacing: 10) {
+                    Button { recorder.cancel() } label: {
+                        Image(systemName: "xmark").font(.headline).foregroundStyle(p.danger).frame(width: 44, height: 44).glass(22, interactive: true)
+                    }.buttonStyle(.plain)
+                    HStack(spacing: 8) {
+                        Circle().fill(p.danger).frame(width: 10, height: 10)
+                        Text("Запись  \(formatMs(Int64(recorder.elapsed * 1000))) / 5:00").font(.subheadline.monospacedDigit()).foregroundStyle(p.text)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 12).glass(22)
+                    Button { finishVoice() } label: {
+                        Image(systemName: "arrow.up").font(.headline.bold()).foregroundStyle(p.onAccent)
+                            .frame(width: 44, height: 44).background(Circle().fill(p.gradient))
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12).padding(.bottom, 8)
+            } else {
             HStack(alignment: .bottom, spacing: 8) {
                 Button { importing = true } label: {
                     Image(systemName: "paperclip").font(.title3).foregroundStyle(p.text).frame(width: 44, height: 44).glass(22, interactive: true)
@@ -306,14 +401,36 @@ struct ChatView: View {
                     .foregroundStyle(p.text)
                     .padding(.horizontal, 16).padding(.vertical, 12)
                     .glass(22)
-                Button { send() } label: {
-                    Image(systemName: sending ? "hourglass" : "arrow.up").font(.headline.bold()).foregroundStyle(p.onAccent)
-                        .frame(width: 44, height: 44).background(Circle().fill(p.gradient))
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { Task { _ = await recorder.start() } } label: {
+                        Image(systemName: "mic.fill").font(.headline.bold()).foregroundStyle(p.onAccent)
+                            .frame(width: 44, height: 44).background(Circle().fill(p.gradient))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button { send() } label: {
+                        Image(systemName: sending ? "hourglass" : "arrow.up").font(.headline.bold()).foregroundStyle(p.onAccent)
+                            .frame(width: 44, height: 44).background(Circle().fill(p.gradient))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(text.count > maxChars)
                 }
-                .buttonStyle(.plain)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > maxChars)
             }
             .padding(.horizontal, 12).padding(.bottom, 8)
+            }
+        }
+        .onChange(of: recorder.recording) { was, now in
+            // Достигли 5 минут — запись остановилась сама, отправляем
+            if was && !now, recorder.elapsed >= Double(maxVoiceMs / 1000) - 0.5 { finishVoice() }
+        }
+    }
+
+    private func finishVoice() {
+        guard let (url, dur) = recorder.stop() else { return }
+        Task {
+            sending = true
+            do { try await m.sendVoice(peer, url: url, durationMs: dur) } catch { app.show(error.localizedDescription) }
+            sending = false
         }
     }
 
@@ -429,6 +546,7 @@ struct UserProfileView: View {
                             .font(.title3.monospacedDigit()).foregroundStyle(p.accent)
                         Text("Сверьте код с собеседником: если совпадает, переписку никто не подменяет.").font(.caption).foregroundStyle(p.text2)
                     }.glassCard()
+                    SharedContentView(peer: username)
                 }
             } else if let error {
                 Text(error).foregroundStyle(p.danger).glassCard()

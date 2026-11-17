@@ -401,6 +401,7 @@ final class AppModel: ObservableObject {
                 "water": pv.water.rawValue, "nowPlaying": pv.nowPlaying.rawValue,
             ] as JSON,
             "myStatus": messenger.myStatus,
+            "pins": Array(messenger.pins),
             "data": exportJson(),
             "walks": data.walks.map { w -> JSON in
                 ["startedAt": w.startedAt, "durationMs": w.durationMs, "distanceM": w.distanceM, "steps": w.steps,
@@ -483,6 +484,7 @@ final class AppModel: ObservableObject {
                                 habits: vis("habits", .CONTACTS), water: vis("water", .NOBODY), nowPlaying: vis("nowPlaying", .ALL))
         }
         if let ms = j["myStatus"] as? String, ms == "ONLINE" || ms == "DND" { messenger.myStatus = ms }
+        if let pins = j["pins"] as? [String] { messenger.setPins(Set(pins)) }
         for w in j["walks"] as? [JSON] ?? [] {
             let pts = (w["points"] as? [[Double]] ?? []).compactMap { a -> WalkPoint? in
                 a.count >= 3 ? WalkPoint(lat: a[0], lon: a[1], time: Int64(a[2])) : nil

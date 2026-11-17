@@ -57,12 +57,51 @@ struct RemoteMessage {
     let ciphertext: String
     let clientId: String
     let createdAt: Int64
+    var group: Int64 = 0
 
     static func parse(_ o: JSON) -> RemoteMessage? {
         guard let id = (o["id"] as? NSNumber)?.int64Value, let from = o["from"] as? String, let to = o["to"] as? String,
               let ct = o["ciphertext"] as? String, let cid = o["clientId"] as? String else { return nil }
-        return RemoteMessage(id: id, from: from, to: to, ciphertext: ct, clientId: cid, createdAt: (o["createdAt"] as? NSNumber)?.int64Value ?? 0)
+        return RemoteMessage(id: id, from: from, to: to, ciphertext: ct, clientId: cid, createdAt: (o["createdAt"] as? NSNumber)?.int64Value ?? 0,
+                             group: (o["group"] as? NSNumber)?.int64Value ?? 0)
     }
+}
+
+struct GroupMember: Hashable { let username: String; let displayName: String; let avatar: String; let publicKey: String? }
+
+/// Групповой чат (до 5 участников). Ключ диалога — "g:<id>".
+struct GroupInfo: Hashable, Identifiable {
+    let id: Int64
+    let name: String
+    let owner: String
+    let members: [GroupMember]
+    var conv: String { "g:\(id)" }
+
+    static func parse(_ o: JSON) -> GroupInfo? {
+        guard let id = (o["id"] as? NSNumber)?.int64Value else { return nil }
+        let members = (o["members"] as? [JSON] ?? []).compactMap { m -> GroupMember? in
+            guard let u = m["username"] as? String else { return nil }
+            let k = m["publicKey"] as? String
+            return GroupMember(username: u, displayName: m["displayName"] as? String ?? "", avatar: remoteAvatar(u, m["avatar"] as? String ?? ""),
+                               publicKey: (k?.isEmpty ?? true) ? nil : k)
+        }
+        return GroupInfo(id: id, name: o["name"] as? String ?? "", owner: o["owner"] as? String ?? "", members: members)
+    }
+
+    var json: JSON {
+        ["id": id, "name": name, "owner": owner, "members": members.map { m -> JSON in
+            ["username": m.username, "displayName": m.displayName, "publicKey": m.publicKey ?? "",
+             "avatar": m.avatar.hasPrefix("remote:") ? "photo:" + (m.avatar.split(separator: ":").last.map(String.init) ?? "") : m.avatar]
+        }]
+    }
+}
+
+func isGroupConv(_ peer: String) -> Bool { peer.hasPrefix("g:") }
+func groupIdOf(_ peer: String) -> Int64 { Int64(peer.dropFirst(2)) ?? 0 }
+
+/// "photo:<ts>" с сервера → "remote:<логин>:<ts>": фото загружается по ссылке с авторизацией.
+func remoteAvatar(_ username: String, _ avatar: String) -> String {
+    avatar.hasPrefix("photo:") ? "remote:\(username):\(avatar.dropFirst(6))" : avatar
 }
 
 /// HTTP-клиент сервера HLTH (тот же API, что у Android).
@@ -154,7 +193,7 @@ final class Api {
     private func users(_ arr: Any?) -> [RemoteUser] {
         (arr as? [JSON] ?? []).compactMap { o in
             guard let u = o["username"] as? String else { return nil }
-            return RemoteUser(username: u, displayName: o["displayName"] as? String ?? "", avatar: o["avatar"] as? String ?? "", presence: Presence.parse(o))
+            return RemoteUser(username: u, displayName: o["displayName"] as? String ?? "", avatar: remoteAvatar(u, o["avatar"] as? String ?? ""), presence: Presence.parse(o))
         }
     }
     func search(_ q: String) async throws -> [RemoteUser] {
@@ -171,7 +210,7 @@ final class Api {
         let ms = j["manualStatus"] as? String
         return RemoteProfile(
             username: j["username"] as? String ?? u, displayName: j["displayName"] as? String ?? "",
-            avatar: j["avatar"] as? String ?? "", bio: j["bio"] as? String ?? "",
+            avatar: remoteAvatar(j["username"] as? String ?? u, j["avatar"] as? String ?? ""), bio: j["bio"] as? String ?? "",
             createdAt: (j["createdAt"] as? NSNumber)?.int64Value ?? 0, fields: j["fields"] as? JSON ?? [:],
             publicKey: (key?.isEmpty ?? true) ? nil : key, isContact: j["isContact"] as? Bool ?? false,
             isSelf: j["isSelf"] as? Bool ?? false, presence: Presence.parse(j), manualStatus: (ms?.isEmpty ?? true) ? nil : ms)
@@ -182,8 +221,54 @@ final class Api {
         let j = try await call("POST", "/messages", ["to": to, "ctRecipient": ctRecipient, "ctSender": ctSender, "clientId": clientId, "mediaIds": mediaIds])
         return ((j["id"] as? NSNumber)?.int64Value ?? 0, (j["createdAt"] as? NSNumber)?.int64Value ?? nowMs())
     }
-    func messages(since: Int64) async throws -> [RemoteMessage] {
-        (try await call("GET", "/messages?since=\(since)")["messages"] as? [JSON] ?? []).compactMap(RemoteMessage.parse)
+    func messages(since: Int64) async throws -> (list: [RemoteMessage], cursor: Int64, more: Bool) {
+        let j = try await call("GET", "/messages?since=\(since)")
+        let list = (j["messages"] as? [JSON] ?? []).compactMap(RemoteMessage.parse)
+        let cursor = (j["cursor"] as? NSNumber)?.int64Value ?? (list.map(\.id).max() ?? since)
+        let more = j["more"] as? Bool ?? (list.count >= 500)
+        return (list, cursor, more)
+    }
+
+    // MARK: группы
+    func groups() async throws -> [GroupInfo] { (try await call("GET", "/groups")["groups"] as? [JSON] ?? []).compactMap(GroupInfo.parse) }
+    func createGroup(name: String, members: [String]) async throws -> GroupInfo? {
+        GroupInfo.parse(try await call("POST", "/groups", ["name": name, "members": members]))
+    }
+    func renameGroup(_ id: Int64, _ name: String) async throws { try await call("PUT", "/groups/\(id)", ["name": name]) }
+    func addGroupMember(_ id: Int64, _ u: String) async throws { try await call("POST", "/groups/\(id)/members", ["username": u]) }
+    func removeGroupMember(_ id: Int64, _ u: String) async throws { try await call("DELETE", "/groups/\(id)/members/\(u)") }
+    func sendGroup(_ id: Int64, clientId: String, cts: [String: String], mediaIds: [String]) async throws -> (Int64, Int64) {
+        let j = try await call("POST", "/groups/\(id)/messages", ["clientId": clientId, "cts": cts, "mediaIds": mediaIds])
+        return ((j["id"] as? NSNumber)?.int64Value ?? 0, (j["createdAt"] as? NSNumber)?.int64Value ?? nowMs())
+    }
+
+    // MARK: прочитано / прослушано / удаление
+    func read(_ conv: String, upTo: Int64) async throws { try await call("POST", "/read", ["conv": conv, "upTo": upTo]) }
+    func listened(_ id: Int64) async throws { try await call("POST", "/messages/\(id)/listened") }
+    func receipts() async throws -> (reads: [(conv: String, upTo: Int64)], listened: [Int64]) {
+        let j = try await call("GET", "/receipts")
+        let reads = (j["reads"] as? [JSON] ?? []).compactMap { o -> (conv: String, upTo: Int64)? in
+            guard let c = o["conv"] as? String else { return nil }
+            return (c, (o["upTo"] as? NSNumber)?.int64Value ?? 0)
+        }
+        let listened = (j["listened"] as? [NSNumber] ?? []).map(\.int64Value)
+        return (reads, listened)
+    }
+    func clearConversation(_ conv: String, all: Bool) async throws {
+        let e = conv.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? conv
+        try await call("DELETE", "/conversations/\(e)" + (all ? "?all=1" : ""))
+    }
+
+    // MARK: фото профиля
+    func putAvatar(_ jpeg: Data) async throws {
+        let (code, _) = try await raw("PUT", "/me/avatar", body: jpeg)
+        guard (200..<300).contains(code) else { throw ApiError(code: code, error: "avatar", message: "Не удалось загрузить фото (\(code))") }
+    }
+    func deleteAvatar() async throws { try await call("DELETE", "/me/avatar") }
+    func avatarRequest(_ username: String, version: String) -> URLRequest {
+        var r = URLRequest(url: url("/users/\(username)/avatar?v=\(version)"))
+        if let token { r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        return r
     }
     func uploadMedia(_ bytes: Data) async throws -> String {
         let (code, data) = try await raw("POST", "/media", body: bytes)

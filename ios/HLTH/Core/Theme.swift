@@ -64,7 +64,8 @@ struct Palette {
         let mono = accentIndex >= 5
         let a1 = Color(hex: pair.0), a2 = Color(hex: pair.1)
         let base: Color = black ? .black : (isDark ? Color(hex: 0x080A0C) : Color(hex: 0xF1F3F5))
-        let blobOpacity: Double = black ? 0.28 : (isDark ? (mono ? 0.18 : 0.45) : (mono ? 0.18 : 0.5))
+        // Чёрная тема — по-настоящему чёрная: без цветного свечения у монохромных акцентов и едва заметное у цветных.
+        let blobOpacity: Double = black ? (mono ? 0 : 0.08) : (isDark ? (mono ? 0.18 : 0.45) : (mono ? 0.18 : 0.5))
         let blobs = [a1, a2, a1.mix(a2), a1.mix(.white, 0.3), a2.mix(a1, 0.25)].map { $0.opacity(blobOpacity) }
         return Palette(
             isDark: isDark, isBlack: black, accent: a1, accent2: a2, base: base, blobs: blobs,
@@ -131,7 +132,7 @@ struct GlassBackground: ViewModifier {
     @available(iOS 26.0, *)
     private var glass: Glass {
         var g = Glass.regular
-        if let tint { g = g.tint(tint) }
+        if let tint { g = g.tint(tint) } else if p.isBlack { g = g.tint(.black.opacity(0.6)) }
         if interactive { g = g.interactive() }
         return g
     }
@@ -139,11 +140,11 @@ struct GlassBackground: ViewModifier {
 
     private func fallback(_ content: Content, _ shape: RoundedRectangle) -> some View {
         content
-            .background(.ultraThinMaterial, in: shape)
+            .background(p.isBlack ? AnyShapeStyle(Color(white: 0.06)) : AnyShapeStyle(.ultraThinMaterial), in: shape)
             .background((tint ?? .clear).opacity(0.35), in: shape)
             .overlay(
                 shape.strokeBorder(
-                    LinearGradient(colors: [.white.opacity(p.isDark ? 0.35 : 0.9), .white.opacity(0.05)],
+                    LinearGradient(colors: [.white.opacity(p.isBlack ? 0.18 : (p.isDark ? 0.35 : 0.9)), .white.opacity(0.03)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     lineWidth: 1)
             )
@@ -238,14 +239,14 @@ struct LiquidBackground: View {
             let w = geo.size.width, h = geo.size.height
             ZStack {
                 p.base
-                ForEach(0..<p.blobs.count, id: \.self) { i in
+                if !p.isBlack || !p.mono { ForEach(0..<p.blobs.count, id: \.self) { i in
                     let pos = Self.positions[i]
                     Circle()
                         .fill(p.blobs[i])
                         .frame(width: w * 0.9, height: w * 0.9)
                         .position(x: w * (phase ? pos.2 : pos.0), y: h * (phase ? pos.3 : pos.1))
                         .blur(radius: 70)
-                }
+                } }
             }
             .onAppear {
                 guard animated else { return }
@@ -307,6 +308,8 @@ struct AvatarView: View {
         ZStack {
             if let photo, let img = UIImage(data: photo) {
                 Image(uiImage: img).resizable().scaledToFill()
+            } else if let a = avatar, a.hasPrefix("remote:") {
+                RemoteAvatarImage(spec: a)
             } else if let a = avatar, a.hasPrefix("preset:"), let i = Int(a.dropFirst(7)) {
                 Image("avatar_\(max(1, min(16, i + 1)))").resizable().scaledToFill()
             } else {

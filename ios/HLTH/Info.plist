@@ -31,6 +31,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key><string>Маршрут прогулки на карте.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Запись маршрута прогулки, когда экран выключен.</string>
 	<key>NSPhotoLibraryUsageDescription</key><string>Фото профиля и вложения в мессенджере.</string>
+	<key>NSMicrophoneUsageDescription</key><string>Запись голосовых сообщений в мессенджере.</string>
 	<key>NSCameraUsageDescription</key><string>Фото профиля.</string>
 	<key>NSAppleMusicUsageDescription</key><string>Показывать собеседникам, что у вас играет в «Музыке».</string>
 	<key>NSSupportsLiveActivities</key><true/>

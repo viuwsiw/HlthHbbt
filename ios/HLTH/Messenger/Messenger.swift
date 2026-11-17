@@ -1,9 +1,12 @@
 import Foundation
+import CryptoKit
 import UserNotifications
 import UIKit
 
 let maxChars = 5000
 let maxMediaBytes = 30 * 1024 * 1024
+
+let maxVoiceMs: Int64 = 5 * 60_000
 
 struct MediaInfo: Codable, Hashable {
     var id: String
@@ -12,16 +15,39 @@ struct MediaInfo: Codable, Hashable {
     var mime: String
     var name: String
     var size: Int
+    var voice: Bool = false
+    var duration: Int64 = 0
 
     var isImage: Bool { mime.hasPrefix("image/") }
     var isVideo: Bool { mime.hasPrefix("video/") }
 
-    var json: JSON { ["id": id, "key": key, "nonce": nonce, "mime": mime, "name": name, "size": size] }
+    var json: JSON {
+        var j: JSON = ["id": id, "key": key, "nonce": nonce, "mime": mime, "name": name, "size": size]
+        if voice { j["voice"] = true; j["duration"] = duration }
+        return j
+    }
 
     static func parse(_ o: JSON?) -> MediaInfo? {
         guard let o, let id = o["id"] as? String, let key = o["key"] as? String, let nonce = o["nonce"] as? String else { return nil }
         return MediaInfo(id: id, key: key, nonce: nonce, mime: o["mime"] as? String ?? "application/octet-stream",
-                         name: o["name"] as? String ?? "file", size: (o["size"] as? NSNumber)?.intValue ?? 0)
+                         name: o["name"] as? String ?? "file", size: (o["size"] as? NSNumber)?.intValue ?? 0,
+                         voice: o["voice"] as? Bool ?? false, duration: (o["duration"] as? NSNumber)?.int64Value ?? 0)
+    }
+
+    init(id: String, key: String, nonce: String, mime: String, name: String, size: Int, voice: Bool = false, duration: Int64 = 0) {
+        self.id = id; self.key = key; self.nonce = nonce; self.mime = mime; self.name = name; self.size = size; self.voice = voice; self.duration = duration
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        key = try c.decode(String.self, forKey: .key)
+        nonce = try c.decode(String.self, forKey: .nonce)
+        mime = try c.decode(String.self, forKey: .mime)
+        name = try c.decode(String.self, forKey: .name)
+        size = try c.decode(Int.self, forKey: .size)
+        voice = try c.decodeIfPresent(Bool.self, forKey: .voice) ?? false
+        duration = try c.decodeIfPresent(Int64.self, forKey: .duration) ?? 0
     }
 }
 
@@ -35,6 +61,30 @@ struct ChatMessage: Codable, Identifiable, Hashable {
     var serverId: Int64 = 0
     var readable = true
     var media: MediaInfo? = nil
+    /// Автор (важно для групп).
+    var sender: String = ""
+    /// Голосовое прослушано.
+    var listened = false
+
+    init(clientId: String, peer: String, outgoing: Bool, text: String, createdAt: Int64, serverId: Int64 = 0,
+         readable: Bool = true, media: MediaInfo? = nil, sender: String = "", listened: Bool = false) {
+        self.clientId = clientId; self.peer = peer; self.outgoing = outgoing; self.text = text; self.createdAt = createdAt
+        self.serverId = serverId; self.readable = readable; self.media = media; self.sender = sender; self.listened = listened
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clientId = try c.decode(String.self, forKey: .clientId)
+        peer = try c.decode(String.self, forKey: .peer)
+        outgoing = try c.decode(Bool.self, forKey: .outgoing)
+        text = try c.decode(String.self, forKey: .text)
+        createdAt = try c.decode(Int64.self, forKey: .createdAt)
+        serverId = try c.decodeIfPresent(Int64.self, forKey: .serverId) ?? 0
+        readable = try c.decodeIfPresent(Bool.self, forKey: .readable) ?? true
+        media = try c.decodeIfPresent(MediaInfo.self, forKey: .media)
+        sender = try c.decodeIfPresent(String.self, forKey: .sender) ?? ""
+        listened = try c.decodeIfPresent(Bool.self, forKey: .listened) ?? false
+    }
 }
 
 enum LinkState { case notLinked, connecting, online, offline }
@@ -50,6 +100,10 @@ final class Messenger: ObservableObject {
         didSet { UserDefaults.standard.set(myStatus, forKey: "my_status") }
     }
     @Published var readMarks: [String: Int64] = [:]
+    @Published var groups: [Int64: GroupInfo] = [:]
+    @Published var pins: Set<String> = []
+    /// До какого сообщения собеседник (или кто-то в группе) прочитал диалог.
+    @Published var peerRead: [String: Int64] = [:]
     var openChat: String?
 
     private var api: Api { app.api }
@@ -67,7 +121,9 @@ final class Messenger: ObservableObject {
     func start() {
         guard let u = me else { return }
         loadChats(u)
+        loadLocalState(u)
         Task {
+            await refreshGroups()
             try? await api.putKey(E2E.publicKey(u))
             try? await api.setStatus(myStatus)
             await pushProfile()
@@ -86,6 +142,69 @@ final class Messenger: ObservableObject {
         state = .notLinked
         chats = [:]
         keyCache = [:]
+        groups = [:]
+        pins = []
+        peerRead = [:]
+    }
+
+    // MARK: локальное состояние: закрепы, «прочитано», группы
+
+    private func loadLocalState(_ u: String) {
+        pins = Set(UserDefaults.standard.stringArray(forKey: "pins_\(u)") ?? [])
+        peerRead = (UserDefaults.standard.dictionary(forKey: "peer_read_\(u)") as? [String: NSNumber] ?? [:]).mapValues(\.int64Value)
+        if let raw = UserDefaults.standard.data(forKey: "groups_\(u)"),
+           let arr = (try? JSONSerialization.jsonObject(with: raw)) as? [JSON] {
+            groups = Dictionary(uniqueKeysWithValues: arr.compactMap(GroupInfo.parse).map { ($0.id, $0) })
+        }
+    }
+
+    func setPins(_ p: Set<String>) {
+        pins = p
+        if let u = me { UserDefaults.standard.set(Array(p), forKey: "pins_\(u)") }
+        app.backupSoon()
+    }
+
+    func togglePin(_ peer: String) { setPins(pins.contains(peer) ? pins.subtracting([peer]) : pins.union([peer])) }
+
+    private func setPeerRead(_ conv: String, _ upTo: Int64) {
+        guard upTo > (peerRead[conv] ?? 0), let u = me else { return }
+        peerRead[conv] = upTo
+        UserDefaults.standard.set(peerRead.mapValues { NSNumber(value: $0) }, forKey: "peer_read_\(u)")
+    }
+
+    func refreshGroups() async {
+        guard let list = try? await api.groups(), let u = me else { return }
+        groups = Dictionary(uniqueKeysWithValues: list.map { ($0.id, $0) })
+        if let raw = try? JSONSerialization.data(withJSONObject: list.map(\.json)) { UserDefaults.standard.set(raw, forKey: "groups_\(u)") }
+    }
+
+    func group(_ peer: String) -> GroupInfo? { isGroupConv(peer) ? groups[groupIdOf(peer)] : nil }
+
+    func chatTitle(_ peer: String) -> String { group(peer)?.name ?? "@\(peer)" }
+
+    func createGroup(name: String, members: [String]) async throws -> GroupInfo? {
+        let g = try await api.createGroup(name: name.trimmingCharacters(in: .whitespaces), members: members)
+        await refreshGroups()
+        return g
+    }
+
+    func renameGroup(_ id: Int64, _ name: String) async throws { try await api.renameGroup(id, name); await refreshGroups() }
+    func addGroupMember(_ id: Int64, _ u: String) async throws {
+        try await api.addGroupMember(id, u.trimmingCharacters(in: .whitespaces).lowercased().replacingOccurrences(of: "@", with: ""))
+        await refreshGroups()
+    }
+    func removeGroupMember(_ id: Int64, _ u: String) async throws {
+        try await api.removeGroupMember(id, u)
+        if u == me { chats["g:\(id)"] = nil; saveChats(); setPins(pins.subtracting(["g:\(id)"])) }
+        await refreshGroups()
+    }
+
+    /// Удалить переписку у себя или у всех.
+    func clearConversation(_ peer: String, forAll: Bool) async throws {
+        try await api.clearConversation(peer, all: forAll)
+        chats[peer] = nil
+        saveChats()
+        setPins(pins.subtracting([peer]))
     }
 
     // MARK: storage
@@ -122,10 +241,21 @@ final class Messenger: ObservableObject {
         set { UserDefaults.standard.set(Double(newValue), forKey: "notified_\(me ?? "")") }
     }
 
+    /// Чат открыт и сообщения видны — отмечаем прочитанным (у собеседника появятся две галочки).
     func markRead(_ peer: String) {
         guard let u = me, let maxId = chats[peer]?.map(\.serverId).max(), maxId > (readMarks[peer] ?? 0) else { return }
         readMarks[peer] = maxId
         UserDefaults.standard.set(readMarks.mapValues { NSNumber(value: $0) }, forKey: "read_\(u)")
+        if peer != u { Task { try? await api.read(peer, upTo: maxId) } }
+    }
+
+    /// Входящее голосовое впервые прослушано.
+    func markListened(_ m: ChatMessage) {
+        guard !m.outgoing, !m.listened, m.serverId > 0 else { return }
+        var x = m
+        x.listened = true
+        upsert(x)
+        Task { try? await api.listened(m.serverId) }
     }
 
     func unread(_ peer: String) -> Int {
@@ -136,10 +266,19 @@ final class Messenger: ObservableObject {
     struct Conversation: Identifiable { var id: String { peer }; let peer: String; let last: ChatMessage }
 
     var conversations: [Conversation] {
-        chats.compactMap { peer, list in
+        var out: [Conversation] = chats.compactMap { peer, list in
             guard peer != me, let last = list.max(by: { $0.createdAt < $1.createdAt }) else { return nil }
             return Conversation(peer: peer, last: last)
-        }.sorted { $0.last.createdAt > $1.last.createdAt }
+        }
+        // Группы без сообщений тоже видны
+        for g in groups.values where chats[g.conv]?.isEmpty ?? true {
+            out.append(Conversation(peer: g.conv, last: ChatMessage(clientId: "empty_\(g.id)", peer: g.conv, outgoing: false, text: "Группа создана", createdAt: 0)))
+        }
+        return out.sorted { a, b in
+            let pa = pins.contains(a.peer), pb = pins.contains(b.peer)
+            if pa != pb { return pa }
+            return a.last.createdAt > b.last.createdAt
+        }
     }
 
     private func upsert(_ m: ChatMessage) {
@@ -167,6 +306,7 @@ final class Messenger: ObservableObject {
 
     private func sendPayload(_ peer: String, _ text: String, _ media: MediaInfo?) async throws {
         guard let u = me else { throw ApiError(code: 0, error: "not_linked", message: "Мессенджер не подключён") }
+        if isGroupConv(peer) { return try await sendGroupPayload(u, peer, text, media) }
         let isSelf = peer == u
         let myKey = E2E.publicKey(u)
         let theirKey: String
@@ -180,7 +320,7 @@ final class Messenger: ObservableObject {
         if let media { payload["media"] = media.json }
         let payloadStr = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
         let clientId = UUID().uuidString.lowercased()
-        var msg = ChatMessage(clientId: clientId, peer: peer, outgoing: true, text: text, createdAt: nowMs(), media: media)
+        var msg = ChatMessage(clientId: clientId, peer: peer, outgoing: true, text: text, createdAt: nowMs(), media: media, sender: u)
         upsert(msg)
         await throttle()
         let ct = try E2E.encrypt(recipientPublicKey: theirKey, payloadStr, from: u, to: peer)
@@ -190,6 +330,56 @@ final class Messenger: ObservableObject {
         msg.createdAt = createdAt
         upsert(msg)
         markRead(peer)
+    }
+
+    /// Групповое сообщение: шифруется отдельно ключом каждого участника (и своим).
+    private func sendGroupPayload(_ u: String, _ peer: String, _ text: String, _ media: MediaInfo?) async throws {
+        if group(peer) == nil { await refreshGroups() }
+        guard var g = group(peer) else { throw ApiError(code: 404, error: "no_group", message: "Группа не найдена") }
+        var payload: JSON = ["v": 1, "text": text]
+        if let media { payload["media"] = media.json }
+        let payloadStr = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+        let clientId = UUID().uuidString.lowercased()
+        var msg = ChatMessage(clientId: clientId, peer: peer, outgoing: true, text: text, createdAt: nowMs(), media: media, sender: u)
+        upsert(msg)
+        await throttle()
+        var attempt = 0
+        while true {
+            var cts: [String: String] = [:]
+            for m in g.members {
+                let key: String
+                if m.username == u { key = E2E.publicKey(u) }
+                else if let k = m.publicKey { key = k }
+                else if let k = try await peerKey(m.username, refresh: true) { key = k }
+                else { throw ApiError(code: 0, error: "no_key", message: "@\(m.username) ещё не включил шифрование") }
+                cts[m.username] = try E2E.encrypt(recipientPublicKey: key, payloadStr, from: u, to: peer)
+            }
+            do {
+                let (id, createdAt) = try await api.sendGroup(g.id, clientId: clientId, cts: cts, mediaIds: media.map { [$0.id] } ?? [])
+                msg.serverId = id
+                msg.createdAt = createdAt
+                upsert(msg)
+                markRead(peer)
+                return
+            } catch let e as ApiError where e.error == "members_changed" && attempt == 0 {
+                attempt += 1
+                await refreshGroups()
+                guard let ng = group(peer) else { throw e }
+                g = ng
+            }
+        }
+    }
+
+    /// Голосовое (AAC до 5 минут): шифруется как файл, в сообщении — пометка voice и длительность.
+    func sendVoice(_ peer: String, url: URL, durationMs: Int64) async throws {
+        let data = try Data(contentsOf: url)
+        guard data.count <= maxMediaBytes else { throw ApiError(code: 413, error: "file_too_large", message: "Голосовое больше 30 МБ") }
+        let (cipher, key, nonce) = try E2E.encryptFile(data)
+        let id = try await api.uploadMedia(cipher)
+        try? data.write(to: mediaDir.appendingPathComponent(id))
+        try? FileManager.default.removeItem(at: url)
+        let media = MediaInfo(id: id, key: key, nonce: nonce, mime: "audio/mp4", name: "voice.m4a", size: data.count, voice: true, duration: min(durationMs, maxVoiceMs))
+        try await sendPayload(peer, "", media)
     }
 
     private var sendTimes: [Date] = []
@@ -244,16 +434,30 @@ final class Messenger: ObservableObject {
         syncing = true
         defer { syncing = false }
         while true {
-            let batch: [RemoteMessage]
-            do { batch = try await api.messages(since: lastMessageId) } catch {
+            let page: (list: [RemoteMessage], cursor: Int64, more: Bool)
+            do { page = try await api.messages(since: lastMessageId) } catch {
                 if let e = error as? ApiError, e.code == 401 { await sessionExpired() }
                 return
             }
-            if batch.isEmpty { break }
-            for m in batch { process(u, m) }
-            lastMessageId = batch.map(\.id).max() ?? lastMessageId
-            if batch.count < 500 { break }
+            for m in page.list { process(u, m) }
+            if page.cursor > lastMessageId { lastMessageId = page.cursor }
+            if !page.more { break }
         }
+        if let r = try? await api.receipts() {
+            for x in r.reads { setPeerRead(x.conv, x.upTo) }
+            applyListened(Set(r.listened))
+        }
+    }
+
+    private func applyListened(_ ids: Set<Int64>) {
+        guard !ids.isEmpty else { return }
+        var changed = false
+        for (peer, list) in chats {
+            var l = list
+            for i in l.indices where !l[i].listened && ids.contains(l[i].serverId) { l[i].listened = true; changed = true }
+            chats[peer] = l
+        }
+        if changed { saveChats() }
     }
 
     private func sessionExpired() async {
@@ -263,7 +467,9 @@ final class Messenger: ObservableObject {
 
     private func process(_ u: String, _ m: RemoteMessage) {
         let outgoing = m.from == u
-        let peer = outgoing ? m.to : m.from
+        let peer = m.group > 0 ? "g:\(m.group)" : (outgoing ? m.to : m.from)
+        if m.group > 0 && groups[m.group] == nil { Task { await refreshGroups() } }
+        let wasListened = chats[peer]?.first { $0.clientId == m.clientId }?.listened ?? false
         let payload = E2E.decrypt(me: u, m.ciphertext, from: m.from, to: m.to)
             .flatMap { $0.data(using: .utf8) }
             .flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? JSON }
@@ -271,20 +477,22 @@ final class Messenger: ObservableObject {
         let media = MediaInfo.parse(payload?["media"] as? JSON)
         upsert(ChatMessage(clientId: m.clientId, peer: peer, outgoing: outgoing,
                            text: payload == nil ? "🔒 Не удалось расшифровать (сообщение для другого ключа)" : text,
-                           createdAt: m.createdAt, serverId: m.id, readable: payload != nil, media: media))
+                           createdAt: m.createdAt, serverId: m.id, readable: payload != nil, media: media,
+                           sender: m.from, listened: wasListened))
         if outgoing || openChat == peer { markRead(peer) }
         else if m.id > notifiedId {
             notifiedId = m.id
             if myStatus != "DND" && peer != u {
-                let preview = media != nil ? "📎 " + (text.isEmpty ? media!.name : text) : (payload == nil ? "Новое сообщение" : text)
-                notify(peer, preview)
+                let preview = media?.voice == true ? "🎤 Голосовое сообщение" :
+                    (media != nil ? "📎 " + (text.isEmpty ? media!.name : text) : (payload == nil ? "Новое сообщение" : text))
+                notify(peer, isGroupConv(peer) ? "@\(m.from): \(preview)" : preview)
             }
         }
     }
 
     private func notify(_ peer: String, _ text: String) {
         let c = UNMutableNotificationContent()
-        c.title = "@\(peer)"
+        c.title = chatTitle(peer)
         c.body = text
         c.sound = .default
         c.threadIdentifier = "chat_\(peer)"
@@ -341,6 +549,18 @@ final class Messenger: ObservableObject {
         switch o["type"] as? String {
         case "presence":
             if let name = o["username"] as? String, let p = Presence.parse(o) { presence[name] = p }
+        case "read":
+            if let conv = o["conv"] as? String { setPeerRead(conv, (o["upTo"] as? NSNumber)?.int64Value ?? 0) }
+        case "listened":
+            if let id = (o["id"] as? NSNumber)?.int64Value { applyListened([id]) }
+        case "cleared":
+            if let conv = o["conv"] as? String {
+                let upTo = (o["upTo"] as? NSNumber)?.int64Value ?? 0
+                chats[conv] = chats[conv]?.filter { $0.serverId == 0 || $0.serverId > upTo }
+                saveChats()
+            }
+        case "group":
+            Task { await refreshGroups() }
         case "message":
             if let m = (o["message"] as? JSON).flatMap(RemoteMessage.parse) {
                 process(u, m)
@@ -449,9 +669,28 @@ final class Messenger: ObservableObject {
             let avg = (0...6).map { h.waterByDay[day - Int64($0)] ?? 0 }.reduce(0, +) / 7
             return ["todayMl": h.waterByDay[day] ?? 0, "goalMl": d.profile.waterGoalMl, "avg7Ml": avg] as JSON
         }
-        let avatar = (d.profile.avatar?.hasPrefix("preset:") ?? false) && d.profile.avatarPhoto == nil ? d.profile.avatar! : ""
+        let avatar = await syncAvatar(d.profile)
         try? await api.putProfile(["displayName": d.profile.displayName.isEmpty ? (me ?? "") : d.profile.displayName,
                                    "avatar": avatar, "bio": p.bio, "discoverable": p.discoverable, "fields": fields])
+    }
+
+    /// Фото профиля загружается на сервер один раз (и при смене) — его видят собеседники.
+    private func syncAvatar(_ p: Profile) async -> String {
+        guard let u = me else { return "" }
+        let key = "uploaded_avatar_\(u)"
+        if let photo = p.avatarPhoto {
+            let hash = SHA256.hash(data: photo).prefix(12).map { String(format: "%02x", $0) }.joined()
+            if UserDefaults.standard.string(forKey: key) != hash {
+                if (try? await api.putAvatar(AppModel.jpeg512(photo) ?? photo)) != nil { UserDefaults.standard.set(hash, forKey: key) }
+            }
+            return UserDefaults.standard.string(forKey: key) == hash ? "photo" : ""
+        }
+        if let a = p.avatar, a.hasPrefix("preset:") { UserDefaults.standard.removeObject(forKey: key); return a }
+        if UserDefaults.standard.string(forKey: key) != nil {
+            try? await api.deleteAvatar()
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        return ""
     }
 
     // MARK: users
