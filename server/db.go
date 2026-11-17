@@ -31,6 +31,7 @@ func migrate(db *sql.DB) error {
 	if err := migrateBase(db); err != nil {
 		return err
 	}
+	defer func() { _ = migrateChat2(db) }()
 	// Статусы: ручной (ONLINE/DND) и время последней активности в мессенджере.
 	if err := ensureColumn(db, "users", "status", "TEXT NOT NULL DEFAULT 'ONLINE'"); err != nil {
 		return err

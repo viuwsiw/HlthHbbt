@@ -89,6 +89,19 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /v1/messages", s.auth(s.sendMessage))
 	mux.HandleFunc("GET /v1/messages", s.auth(s.listMessages))
 	mux.HandleFunc("GET /v1/ws", s.ws)
+	mux.HandleFunc("GET /v1/groups", s.auth(s.listGroups))
+	mux.HandleFunc("POST /v1/groups", s.auth(s.createGroup))
+	mux.HandleFunc("PUT /v1/groups/{id}", s.auth(s.updateGroup))
+	mux.HandleFunc("POST /v1/groups/{id}/members", s.auth(s.addMember))
+	mux.HandleFunc("DELETE /v1/groups/{id}/members/{username}", s.auth(s.removeMember))
+	mux.HandleFunc("POST /v1/groups/{id}/messages", s.auth(s.sendGroupMessage))
+	mux.HandleFunc("POST /v1/read", s.auth(s.postRead))
+	mux.HandleFunc("POST /v1/messages/{id}/listened", s.auth(s.postListened))
+	mux.HandleFunc("GET /v1/receipts", s.auth(s.getReceipts))
+	mux.HandleFunc("DELETE /v1/conversations/{conv}", s.auth(s.clearConversation))
+	mux.HandleFunc("PUT /v1/me/avatar", s.auth(s.putAvatar))
+	mux.HandleFunc("DELETE /v1/me/avatar", s.auth(s.deleteAvatar))
+	mux.HandleFunc("GET /v1/users/{username}/avatar", s.auth(s.getAvatar))
 	mux.HandleFunc("GET /v1/me/signing", s.auth(s.getSigning))
 	mux.HandleFunc("PUT /v1/me/signing", s.auth(s.putSigning))
 	mux.HandleFunc("DELETE /v1/me/signing", s.auth(s.deleteSigning))
@@ -313,9 +326,10 @@ func (s *Server) putProfile(w http.ResponseWriter, r *http.Request, u ctxUser) {
 		fail(w, 400, "bad_bio", "О себе — до 160 символов")
 		return
 	}
-	if len(req.Avatar) > 64 { // только встроенные аватары: "preset:N"
+	if len(req.Avatar) > 64 { // встроенные аватары "preset:N" или "photo" (фото загружается отдельно)
 		req.Avatar = ""
 	}
+	req.Avatar = s.resolveAvatar(u.ID, req.Avatar)
 	fields := map[string]field{}
 	for k, f := range req.Fields {
 		if len(k) > 32 || len(f.Value) > 8192 {
@@ -527,6 +541,7 @@ type message struct {
 	Ciphertext string `json:"ciphertext"` // тот вариант, который может расшифровать запрашивающий
 	ClientID   string `json:"clientId"`
 	CreatedAt  int64  `json:"createdAt"`
+	Group      int64  `json:"group,omitempty"`
 }
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) {
@@ -575,38 +590,58 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) 
 	}
 	toName := strings.ToLower(req.To)
 	if to != u.ID { // «Избранное» — себе, одно событие
-		s.hub.send(to, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtRecipient, req.ClientID, now}})
+		s.hub.send(to, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtRecipient, req.ClientID, now, 0}})
 	}
-	s.hub.send(u.ID, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtSender, req.ClientID, now}})
+	s.hub.send(u.ID, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtSender, req.ClientID, now, 0}})
 	writeJSON(w, 200, map[string]any{"id": id, "createdAt": now})
 }
 
 func (s *Server) listMessages(w http.ResponseWriter, r *http.Request, u ctxUser) {
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
-	rows, err := s.db.Query(`SELECT m.id, su.username, ru.username,
-			CASE WHEN m.recipient_id=? THEN m.ct_recipient ELSE m.ct_sender END,
+	clears := s.clearsFor(u.ID) // до основного запроса: у SQLite одно соединение
+	rows, err := s.db.Query(`SELECT m.id, su.username, ru.username, m.group_id,
+			CASE WHEN m.group_id>0 THEN COALESCE(gc.ct, CASE WHEN m.sender_id=? THEN m.ct_sender ELSE '' END)
+			     WHEN m.recipient_id=? THEN m.ct_recipient ELSE m.ct_sender END,
 			m.client_id, m.created_at
 		FROM messages m JOIN users su ON su.id=m.sender_id JOIN users ru ON ru.id=m.recipient_id
-		WHERE (m.recipient_id=? OR m.sender_id=?) AND m.id>? ORDER BY m.id LIMIT 500`, u.ID, u.ID, u.ID, since)
+		LEFT JOIN group_cts gc ON gc.message_id=m.id AND gc.user_id=?
+		WHERE m.id>? AND (
+			(m.group_id=0 AND (m.recipient_id=? OR m.sender_id=?)) OR
+			(m.group_id>0 AND (gc.user_id IS NOT NULL OR m.sender_id=?)))
+		ORDER BY m.id LIMIT 500`, u.ID, u.ID, u.ID, since, u.ID, u.ID, u.ID)
 	if err != nil {
 		fail(w, 500, "internal", "Ошибка сервера")
 		return
 	}
 	defer rows.Close()
 	list := []message{}
+	cursor := since
+	scanned := 0
 	for rows.Next() {
 		var m message
-		_ = rows.Scan(&m.ID, &m.From, &m.To, &m.Ciphertext, &m.ClientID, &m.CreatedAt)
+		_ = rows.Scan(&m.ID, &m.From, &m.To, &m.Group, &m.Ciphertext, &m.ClientID, &m.CreatedAt)
+		scanned++
+		cursor = m.ID
+		conv := m.To
+		if m.Group > 0 {
+			m.To = gconv(m.Group)
+			conv = m.To
+		} else if m.To == u.Username {
+			conv = m.From
+		}
+		if m.ID <= clears[conv] || m.Ciphertext == "" {
+			continue
+		}
 		list = append(list, m)
 	}
-	writeJSON(w, 200, map[string]any{"messages": list})
+	writeJSON(w, 200, map[string]any{"messages": list, "cursor": cursor, "more": scanned == 500})
 }
 
 // ---------- helpers ----------
 
 func withLimits(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/media" && r.URL.Path != "/v1/me/backup" {
+		if r.URL.Path != "/v1/media" && r.URL.Path != "/v1/me/backup" && r.URL.Path != "/v1/me/avatar" {
 			r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 		}
 		w.Header().Set("Cache-Control", "no-store")

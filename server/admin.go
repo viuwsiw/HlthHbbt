@@ -110,7 +110,7 @@ func (s *Server) adminWipe(w http.ResponseWriter, r *http.Request, u ctxUser) {
 	}
 	s.logf("ADMIN WIPE by @%s", u.Username)
 	for _, q := range []string{
-		`DELETE FROM media_access`, `DELETE FROM media`, `DELETE FROM messages`, `DELETE FROM contacts`,
+		`DELETE FROM media_access`, `DELETE FROM media`, `DELETE FROM group_cts`, `DELETE FROM listened`, `DELETE FROM reads`, `DELETE FROM clears`, `DELETE FROM group_members`, `DELETE FROM chat_groups`, `DELETE FROM avatars`, `DELETE FROM messages`, `DELETE FROM contacts`,
 		`DELETE FROM backups`, `DELETE FROM registrations`, `DELETE FROM sessions`,
 		`DELETE FROM users WHERE username NOT IN ('` + strings.ReplaceAll(env("ADMIN_USERS", "developer"), ",", "','") + `')`,
 	} {
