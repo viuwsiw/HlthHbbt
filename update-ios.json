@@ -1,6 +1,6 @@
 {
-  "build": 37,
-  "versionName": "1.2.1",
-  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2.1-ios.ipa",
-  "changelog": "HLTH HBTy 1.2.1 для iOS\n• VPN: VLESS + WebSocket + TLS через системный API Apple — профиль в Настройки → VPN\n• Ключ — с вашего сервера HLTH одной кнопкой или вставкой vless://"
+  "build": 38,
+  "versionName": "1.2.2",
+  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2.2-ios.ipa",
+  "changelog": "HLTH HBTy 1.2.2 для iOS\n• VPN: исправлено подключение к серверу\n• Диагностика: «Проверить сервер» и причина отключения"
 }
