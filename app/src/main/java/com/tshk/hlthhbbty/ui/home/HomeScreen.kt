@@ -58,6 +58,7 @@ import com.tshk.hlthhbbty.ui.glass.ProgressRing
 import com.tshk.hlthhbbty.ui.glass.SectionTitle
 import com.tshk.hlthhbbty.ui.glass.UserAvatar
 import com.tshk.hlthhbbty.ui.glass.VSpace
+import com.tshk.hlthhbbty.ui.glass.appear
 import com.tshk.hlthhbbty.ui.habits.HabitBadge
 import com.tshk.hlthhbbty.ui.habits.HabitCheck
 import com.tshk.hlthhbbty.ui.theme.Liquid
@@ -98,6 +99,7 @@ fun HomeScreen(
     ) {
         // Приветствие + совет дня мелким шрифтом
         item {
+            Column(Modifier.appear(0)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(greeting() + ",", style = MaterialTheme.typography.titleMedium, color = p.textSecondary)
@@ -115,11 +117,13 @@ fun HomeScreen(
             }
             VSpace(6.dp)
             Text("💡 $tip", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+            }
         }
 
         // Главное: вода, шаги, сон
-        item { WaterCard(s.waterMl, user.waterGoalMl, vm::addWater, vm::undoWater) }
+        item { Box(Modifier.appear(1)) { WaterCard(s.waterMl, user.waterGoalMl, vm::addWater, vm::undoWater) } }
         item {
+            Box(Modifier.appear(2)) {
             val h = s.health
             if (h != null) HealthCard(h)
             else GlassCard(Modifier.fillMaxWidth(), onClick = onOpenSettings) {
@@ -133,13 +137,14 @@ fun HomeScreen(
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = p.textSecondary)
                 }
             }
+            }
         }
 
         // Раскрывашка с остальным
         item {
             val done = s.habits.count { it.done }
             val rotation by androidx.compose.animation.core.animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
-            GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), onClick = { expanded = !expanded }) {
+            GlassCard(Modifier.fillMaxWidth().appear(3), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), onClick = { expanded = !expanded }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(if (expanded) "Свернуть" else "Привычки, настроение, музыка", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
@@ -156,7 +161,7 @@ fun HomeScreen(
         if (expanded) {
             item {
                 val done = s.habits.count { it.done }
-                GlassCard(Modifier.fillMaxWidth()) {
+                GlassCard(Modifier.fillMaxWidth().appear(0)) {
                     SectionTitle("Привычки на сегодня") {
                         Text("$done из ${s.habits.size}", style = MaterialTheme.typography.labelLarge, color = p.accent)
                     }
@@ -199,9 +204,9 @@ fun HomeScreen(
                     }
                 }
             }
-            items(s.quits, key = { "q" + it.id }) { q -> QuitCard(q, onRelapse = { vm.relapse(q) }) }
-            item { MoodCard(s.note, vm::saveNote) }
-            item { com.tshk.hlthhbbty.ui.integrations.MusicSection(onOpenIntegrations, onOpenPlayer) }
+            items(s.quits, key = { "q" + it.id }) { q -> Box(Modifier.appear(1)) { QuitCard(q, onRelapse = { vm.relapse(q) }) } }
+            item { Box(Modifier.appear(2)) { MoodCard(s.note, vm::saveNote) } }
+            item { Box(Modifier.appear(3)) { com.tshk.hlthhbbty.ui.integrations.MusicSection(onOpenIntegrations, onOpenPlayer) } }
         }
     }
 }
@@ -210,9 +215,20 @@ fun HomeScreen(
 fun WaterCard(waterMl: Int, goalMl: Int, onAdd: (Int) -> Unit, onUndo: () -> Unit) {
     val p = Liquid.palette
     val progress = if (goalMl > 0) waterMl / goalMl.toFloat() else 0f
+    val shownMl by androidx.compose.animation.core.animateIntAsState(waterMl, androidx.compose.animation.core.tween(700), label = "ml")
+    val bounce = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
+    var lastMl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(waterMl) }
+    androidx.compose.runtime.LaunchedEffect(waterMl) {
+        if (waterMl > lastMl) {
+            bounce.snapTo(0.9f)
+            bounce.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.35f, stiffness = 400f))
+        }
+        lastMl = waterMl
+    }
     GlassCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ProgressRing(progress, listOf(p.water, p.waterDeep, p.accentSecondary), size = 128.dp, stroke = 13.dp) {
+            ProgressRing(progress, listOf(p.water, p.waterDeep, p.accentSecondary), size = 128.dp, stroke = 13.dp,
+                modifier = Modifier.graphicsLayer { scaleX = bounce.value; scaleY = bounce.value }) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.WaterDrop, null, tint = p.water, modifier = Modifier.size(22.dp))
                     Text("${(progress * 100).toInt().coerceAtMost(999)}%", style = MaterialTheme.typography.titleLarge, color = p.textPrimary, fontWeight = FontWeight.Bold)
@@ -222,7 +238,7 @@ fun WaterCard(waterMl: Int, goalMl: Int, onAdd: (Int) -> Unit, onUndo: () -> Uni
             Column(Modifier.weight(1f)) {
                 Text("Вода", style = MaterialTheme.typography.titleMedium, color = p.textSecondary)
                 Text(
-                    "%.2f л".format(waterMl / 1000f),
+                    "%.2f л".format(shownMl / 1000f),
                     style = MaterialTheme.typography.headlineMedium,
                     color = p.textPrimary,
                 )

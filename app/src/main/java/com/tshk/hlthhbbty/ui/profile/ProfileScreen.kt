@@ -56,6 +56,7 @@ import com.tshk.hlthhbbty.ui.glass.GlassChip
 import com.tshk.hlthhbbty.ui.glass.GlassDialog
 import com.tshk.hlthhbbty.ui.glass.UserAvatar
 import com.tshk.hlthhbbty.ui.glass.VSpace
+import com.tshk.hlthhbbty.ui.glass.appear
 import com.tshk.hlthhbbty.ui.theme.Liquid
 import com.tshk.hlthhbbty.util.daysWord
 import com.tshk.hlthhbbty.util.memberSince
@@ -91,6 +92,7 @@ fun ProfileScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
+            Box(Modifier.appear(0)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(24.dp)) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     UserAvatar(user.avatar, user.displayName, 112.dp)
@@ -105,15 +107,19 @@ fun ProfileScreen(
                     }
                 }
             }
+            }
         }
         item {
+            Box(Modifier.appear(1)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MiniStat("🔥", "${s.bestStreak}", "${daysWord(s.bestStreak)} серия", Modifier.weight(1f))
                 MiniStat("✅", "${s.doneToday}/${s.plannedToday}", "сегодня", Modifier.weight(1f))
                 MiniStat("💧", "%.0f л".format(s.waterAllTimeMl / 1000f), "всего", Modifier.weight(1f))
             }
+            }
         }
         item {
+            Box(Modifier.appear(2)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
                 MenuRow(Icons.Rounded.BarChart, "Статистика", onClick = onStats)
                 MenuDivider()
@@ -127,8 +133,10 @@ fun ProfileScreen(
                 MenuDivider()
                 MenuRow(Icons.Rounded.Key, "Сменить пароль", onClick = onChangePassword)
             }
+            }
         }
         item {
+            Box(Modifier.appear(3)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
                 MenuRow(Icons.Rounded.Share, "Поделиться прогрессом") {
                     context.shareText(
@@ -139,15 +147,19 @@ fun ProfileScreen(
                 MenuDivider()
                 MenuRow(Icons.Rounded.MailOutline, "Написать разработчику") { context.sendFeedback() }
             }
+            }
         }
         item {
+            Box(Modifier.appear(4)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
                 MenuRow(Icons.AutoMirrored.Rounded.Logout, "Выйти из аккаунта", tint = p.textPrimary, chevron = false) { confirmLogout = true }
                 MenuDivider()
                 MenuRow(Icons.Rounded.DeleteForever, "Удалить аккаунт", tint = p.danger, chevron = false) { confirmDelete = true }
             }
+            }
         }
         item {
+            Box(Modifier.appear(5)) {
             Text(
                 "HLTH HBTy ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.labelMedium,
@@ -155,6 +167,7 @@ fun ProfileScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
+            }
         }
     }
 

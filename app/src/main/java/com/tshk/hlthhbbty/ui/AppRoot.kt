@@ -34,7 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -188,30 +193,75 @@ private fun MainScaffold() {
     val currentTab by androidx.compose.runtime.rememberUpdatedState(tabIndex)
 
     androidx.compose.runtime.CompositionLocalProvider(com.tshk.hlthhbbty.ui.glass.LocalBottomBarAtEnd provides atEnd) {
+    val swipeScope = androidx.compose.runtime.rememberCoroutineScope()
+    val dragOffset = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val distancePx = with(density) { 48.dp.toPx() }
     Box(
         Modifier
             .fillMaxSize()
             .pointerInput(swipeEnabled) {
                 if (!swipeEnabled) return@pointerInput
-                var total = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { total = 0f },
-                    onDragEnd = {
+                // Слушаем жест на начальном проходе: свайп начинается с любого места —
+                // карточек, кнопок, текста, — ничего не перехватывая у вертикальной прокрутки.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val velocity = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                    velocity.addPosition(down.uptimeMillis, down.position)
+                    var dx = 0f
+                    var dy = 0f
+                    var horizontal: Boolean? = null
+                    while (true) {
+                        val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        dx += change.position.x - change.previousPosition.x
+                        dy += change.position.y - change.previousPosition.y
+                        velocity.addPosition(change.uptimeMillis, change.position)
+                        if (horizontal == null && (kotlin.math.abs(dx) > viewConfiguration.touchSlop || kotlin.math.abs(dy) > viewConfiguration.touchSlop)) {
+                            horizontal = kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.1f
+                        }
+                        if (horizontal == false) break
+                        if (horizontal == true) {
+                            val t = currentTab
+                            // У краёв (с «Главной» назад, с «Профиля» вперёд) — только лёгкое «упирание».
+                            val blocked = (dx > 0 && t == 0) || (dx < 0 && t == tabs.lastIndex)
+                            swipeScope.launch { dragOffset.snapTo(if (blocked) dx * 0.12f else dx * 0.4f) }
+                        }
+                    }
+                    if (horizontal == true) {
+                        val v = velocity.calculateVelocity().x
                         val t = currentTab
                         // Палец влево — следующий раздел, вправо — предыдущий.
-                        // С «Главной» назад некуда, с «Профиля» — вперёд.
-                        if (total < -140f && t in 0 until tabs.lastIndex) nav.switchTab(tabs[t + 1])
-                        else if (total > 140f && t > 0) nav.switchTab(tabs[t - 1])
-                    },
-                ) { _, dx -> total += dx }
+                        val next = dx < -distancePx || v < -700f
+                        val prev = dx > distancePx || v > 700f
+                        if (next && t in 0 until tabs.lastIndex) nav.switchTab(tabs[t + 1])
+                        else if (prev && t > 0) nav.switchTab(tabs[t - 1])
+                    }
+                    swipeScope.launch {
+                        dragOffset.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.7f, stiffness = 500f))
+                    }
+                }
+            }
+            .graphicsLayer {
+                translationX = dragOffset.value
+                alpha = 1f - (kotlin.math.abs(dragOffset.value) / 1200f).coerceIn(0f, 0.25f)
             }
     ) {
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
-            enterTransition = { fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 24 } },
-            exitTransition = { fadeOut(tween(200)) },
-            popEnterTransition = { fadeIn(tween(300)) },
+            enterTransition = {
+                val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                if (dir != 0) slideInHorizontally(tween(320)) { w -> dir * w / 3 } + fadeIn(tween(260))
+                else fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 24 } + scaleIn(tween(300), initialScale = 0.98f)
+            },
+            exitTransition = {
+                val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                if (dir != 0) slideOutHorizontally(tween(320)) { w -> -dir * w / 3 } + fadeOut(tween(200))
+                else fadeOut(tween(200))
+            },
+            popEnterTransition = { fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.98f) },
             popExitTransition = { fadeOut(tween(200)) + slideOutVertically(tween(250)) { it / 24 } },
         ) {
             composable(Routes.HOME) {
@@ -303,6 +353,14 @@ private fun MainScaffold() {
         }
     }
     }
+}
+
+/** 1 — переход на вкладку правее, -1 — левее, 0 — не между вкладками. */
+private fun tabDirection(from: String?, to: String?): Int {
+    val a = tabs.indexOf(from)
+    val b = tabs.indexOf(to)
+    if (a < 0 || b < 0 || a == b) return 0
+    return if (b > a) 1 else -1
 }
 
 private fun NavHostController.switchTab(route: String) {

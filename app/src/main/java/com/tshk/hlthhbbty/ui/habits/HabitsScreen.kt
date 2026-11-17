@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.tshk.hlthhbbty.ui.glass.appear
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -100,9 +102,11 @@ fun HabitsScreen(
                 }
             }
         }
-        items(s.habits, key = { it.habit.id }) { h ->
+        itemsIndexed(s.habits, key = { _, it -> it.habit.id }) { i, h ->
+            Box(Modifier.appear(i + 1)) {
             HabitCard(h, s.day, onTap = { vm.tap(h.habit) }, onEdit = { onEdit(h.habit) },
                 onFreeze = { vm.freezeYesterday(h.habit) }, onFocus = { onFocus(h.habit) }, onWalk = { onWalk(h.habit) })
+            }
         }
         item {
             SectionTitle("Отказ от вредного", Modifier.padding(top = 8.dp)) {
