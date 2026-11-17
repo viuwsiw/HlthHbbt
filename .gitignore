@@ -16,3 +16,4 @@ build/
 server/deploy/.env
 server/data/
 apk/
+.kotlin/
