@@ -71,7 +71,21 @@ jobs:
         run: |
           cd ios
           APP=build/Build/Products/Release-iphoneos/HLTH.app
-          for EXT in "$APP"/PlugIns/*.appex; do
+
+          # 1) Обычная сборка: без VPN-расширения и без права Network Extensions —
+          #    ставится через Sideloadly/AltStore с бесплатным Apple ID.
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          rm -rf Payload/HLTH.app/PlugIns/HLTHTunnel.appex
+          cp HLTH/HLTH.entitlements /tmp/app-novpn.entitlements
+          /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.networking.networkextension" /tmp/app-novpn.entitlements || true
+          for EXT in Payload/HLTH.app/PlugIns/*.appex; do [ -d "$EXT" ] && codesign --force --sign - "$EXT"; done
+          codesign --force --sign - --entitlements /tmp/app-novpn.entitlements Payload/HLTH.app || true
+          NAME="HLTH-HBTy-${VERSION}-ios.ipa"
+          zip -qry "$NAME" Payload
+
+          # 2) Сборка с VPN: для подписи профилем с Network Extensions (wildcard).
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          for EXT in Payload/HLTH.app/PlugIns/*.appex; do
             [ -d "$EXT" ] || continue
             if [ "$(basename "$EXT")" = "HLTHTunnel.appex" ]; then
               codesign --force --sign - --entitlements HLTHTunnel/HLTHTunnel.entitlements "$EXT"
@@ -79,21 +93,21 @@ jobs:
               codesign --force --sign - "$EXT"
             fi
           done
-          codesign --force --sign - --entitlements HLTH/HLTH.entitlements "$APP" || true
-          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
-          NAME="HLTH-HBTy-${VERSION}-ios.ipa"
-          zip -qry "$NAME" Payload
-          ls -la "$NAME"
+          codesign --force --sign - --entitlements HLTH/HLTH.entitlements Payload/HLTH.app || true
+          NAME_VPN="HLTH-HBTy-${VERSION}-ios-vpn.ipa"
+          zip -qry "$NAME_VPN" Payload
+          ls -la "$NAME" "$NAME_VPN"
           echo "IPA=$NAME" >> "$GITHUB_ENV"
+          echo "IPA_VPN=$NAME_VPN" >> "$GITHUB_ENV"
 
       - name: Commit IPA to branch
         run: |
           mkdir -p dist/ios
           rm -f dist/ios/*.ipa
-          mv "ios/$IPA" dist/ios/
+          mv "ios/$IPA" "ios/$IPA_VPN" dist/ios/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f dist/ios
+          git add -A -f dist/ios
           git commit -m "dist: iOS IPA ${VERSION} (${GITHUB_SHA::7})"
           for i in 1 2 3 4; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
