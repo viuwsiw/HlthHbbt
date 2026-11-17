@@ -1,6 +1,6 @@
 {
-  "build": 38,
-  "versionName": "1.2.2",
-  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2.2-ios.ipa",
-  "changelog": "HLTH HBTy 1.2.2 для iOS\n• VPN: исправлено подключение к серверу\n• Диагностика: «Проверить сервер» и причина отключения"
+  "build": 39,
+  "versionName": "1.2.3",
+  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2.3-ios.ipa",
+  "changelog": "HLTH HBTy 1.2.3 для iOS\n• Снова ставится через Sideloadly с бесплатным Apple ID\n• VPN: ключ сервера в Streisand / Hiddify / V2Box одной кнопкой, QR-код"
 }
