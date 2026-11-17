@@ -8,6 +8,7 @@ struct HomeView: View {
     @Environment(\.palette) private var p
     var openTab: (MainTab) -> Void
     @State private var showNote = false
+    @AppStorage("home_habits_open") private var habitsOpen = false
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -44,17 +45,35 @@ struct HomeView: View {
                 GlassButton(title: "Подключить «Здоровье»", systemImage: "heart.fill") { Task { await health.request() } }
             }
 
-            SectionTitle("Сегодня")
-            if habits.isEmpty {
-                Text("На сегодня привычек нет").foregroundStyle(p.text2).glassCard()
-            } else {
+            let doneCount = habits.filter { app.isDone($0) }.count
+            Button {
+                withAnimation(.spring(duration: 0.35)) { habitsOpen.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checklist").font(.title3).foregroundStyle(p.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Привычки на сегодня").font(.headline).foregroundStyle(p.text)
+                        Text(habits.isEmpty ? "На сегодня ничего не запланировано" : "Выполнено \(doneCount) из \(habits.count)")
+                            .font(.caption).foregroundStyle(p.text2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.subheadline.bold()).foregroundStyle(p.text2)
+                        .rotationEffect(.degrees(habitsOpen ? 180 : 0))
+                }
+                .glassCard()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if habitsOpen {
                 VStack(spacing: 10) {
                     ForEach(habits) { h in HabitRow(habit: h) }
+                    Button { openTab(.habits) } label: {
+                        Label("Все привычки", systemImage: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            Button { openTab(.habits) } label: {
-                Label("Все привычки", systemImage: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
-            }.padding(.horizontal, 6)
 
             SectionTitle("Музыка")
             MusicCard()
@@ -174,7 +193,7 @@ struct NoteSheet: View {
             }
         }
         .padding(24)
-        .presentationBackground(.ultraThinMaterial)
+        .glassSheet()
         .onAppear { mood = app.note(day)?.mood ?? 0; text = app.note(day)?.note ?? "" }
     }
 }

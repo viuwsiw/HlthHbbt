@@ -178,7 +178,7 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
-/// Кнопка-капсула из стекла.
+/// Кнопка-капсула: на iOS 26 — системные стили .glass / .glassProminent, раньше — своё стекло.
 struct GlassButton: View {
     let title: String
     var systemImage: String? = nil
@@ -187,19 +187,41 @@ struct GlassButton: View {
     let action: () -> Void
     @Environment(\.palette) private var p
 
+    private var label: some View {
+        HStack(spacing: 8) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(title).fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var fg: Color { prominent ? p.onAccent : (role == .destructive ? p.danger : p.text) }
+
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            if prominent {
+                Button(role: role, action: action) { label.padding(.vertical, 6).foregroundStyle(fg) }
+                    .buttonStyle(.glassProminent).tint(p.accent).controlSize(.large)
+            } else {
+                Button(role: role, action: action) { label.padding(.vertical, 6).foregroundStyle(fg) }
+                    .buttonStyle(.glass).controlSize(.large)
+            }
+        } else {
+            legacy
+        }
+        #else
+        legacy
+        #endif
+    }
+
+    private var legacy: some View {
         Button(role: role, action: action) {
-            HStack(spacing: 8) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title).fontWeight(.semibold)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .foregroundStyle(prominent ? p.onAccent : (role == .destructive ? p.danger : p.text))
-            .background {
-                if prominent { Capsule().fill(p.gradient) }
-            }
-            .glass(28, tint: prominent ? p.accent.opacity(0.6) : nil, interactive: true)
+            label
+                .padding(.vertical, 14)
+                .foregroundStyle(fg)
+                .background { if prominent { Capsule().fill(p.gradient) } }
+                .glass(28, tint: prominent ? p.accent.opacity(0.6) : nil, interactive: true)
         }
         .buttonStyle(.plain)
     }

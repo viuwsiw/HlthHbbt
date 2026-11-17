@@ -66,24 +66,6 @@ struct ChatsView: View {
                     .font(.caption).foregroundStyle(p.text2)
             }
 
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(p.text2)
-                TextField("Поиск по логину", text: $query)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .foregroundStyle(p.text)
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(p.text2) } }
-            }
-            .padding(14).glass(20)
-            .task(id: query) {
-                let q = query.trimmingCharacters(in: .whitespaces)
-                guard q.count >= 2 else { results = []; return }
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                if Task.isCancelled { return }
-                searching = true
-                results = (try? await m.search(q)) ?? []
-                searching = false
-            }
-
             if !query.isEmpty {
                 SectionTitle(searching ? "Ищем…" : "Найдено")
                 ForEach(results) { u in
@@ -146,6 +128,18 @@ struct ChatsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { PrivacyView() } label: { Image(systemName: "hand.raised.fill") }
             }
+        }
+        .searchable(text: $query, prompt: "Поиск по логину")
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .task(id: query) {
+            let q = query.trimmingCharacters(in: .whitespaces)
+            guard q.count >= 2 else { results = []; return }
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            if Task.isCancelled { return }
+            searching = true
+            results = (try? await m.search(q)) ?? []
+            searching = false
         }
         .onAppear { m.enterMessenger() }
         .onDisappear { m.leaveMessenger() }
@@ -216,7 +210,7 @@ struct ChatView: View {
         }
         .safeAreaInset(edge: .bottom) { inputBar }
         .background(LiquidBackground(animated: app.settings.animatedBackground))
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { header }

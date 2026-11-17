@@ -96,6 +96,7 @@ struct WalkView: View {
         }
         .navigationTitle(habit?.title ?? "Прогулка")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear { walk.prepare() }
         .onReceive(tick) { now = $0 }
     }
@@ -167,7 +168,7 @@ struct MusicView: View {
                 .scrollContentBackground(.hidden)
                 .navigationTitle(pl.name).navigationBarTitleDisplayMode(.inline)
             }
-            .presentationBackground(.ultraThinMaterial)
+            .glassSheet()
             .presentationDetents([.medium, .large])
         }
     }

@@ -37,7 +37,7 @@ struct HabitRow: View {
             } else {
                 Button { withAnimation(.spring(duration: 0.3)) { app.tap(habit) } } label: {
                     ZStack {
-                        Circle().stroke(color.opacity(0.25), lineWidth: 4)
+                        Circle().stroke(color.opacity(0.45), lineWidth: 4)
                         Circle().trim(from: 0, to: min(1, Double(count) / Double(max(1, habit.goalPerDay))))
                             .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round)).rotationEffect(.degrees(-90))
                         if done { Image(systemName: "checkmark").font(.headline.bold()).foregroundStyle(color) }
