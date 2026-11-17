@@ -1,0 +1,14 @@
+name: probe
+on:
+  push:
+    branches: [claude/quirky-goodall-is99zk]
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+  mac:
+    runs-on: macos-latest
+    steps:
+      - run: sw_vers; ls /Applications | grep Xcode
