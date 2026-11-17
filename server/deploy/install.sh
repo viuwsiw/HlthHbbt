@@ -31,7 +31,33 @@ if [ -z "${DOMAIN:-}" ]; then
   IP=$(curl -4 -fsS https://api.ipify.org || curl -4 -fsS https://ifconfig.me)
   DOMAIN="$(echo "$IP" | tr . -).sslip.io"
 fi
-echo "DOMAIN=$DOMAIN" > "$DIR/server/deploy/.env"
+# VPN: ключ (UUID) и секретный путь создаются один раз и сохраняются между обновлениями.
+VPNENV="$DIR/vpn.env"
+if [ ! -f "$VPNENV" ]; then
+  echo "VPN_UUID=$(cat /proc/sys/kernel/random/uuid)" > "$VPNENV"
+  echo "VPN_PATH=/$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> "$VPNENV"
+  echo "VPN_USERS=*" >> "$VPNENV"
+fi
+# shellcheck disable=SC1090
+. "$VPNENV"
+{
+  echo "DOMAIN=$DOMAIN"
+  echo "VPN_UUID=$VPN_UUID"
+  echo "VPN_PATH=$VPN_PATH"
+  echo "VPN_USERS=${VPN_USERS:-*}"
+} > "$DIR/server/deploy/.env"
+cat > "$DIR/server/deploy/xray.json" <<XRAY
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [{
+    "listen": "0.0.0.0", "port": 10000, "protocol": "vless",
+    "settings": { "clients": [{ "id": "$VPN_UUID" }], "decryption": "none" },
+    "streamSettings": { "network": "ws", "wsSettings": { "path": "$VPN_PATH" } },
+    "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
+  }],
+  "outbounds": [{ "protocol": "freedom", "settings": { "domainStrategy": "UseIPv4" } }]
+}
+XRAY
 
 if command -v ufw >/dev/null && ufw status | grep -q active; then
   ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
@@ -54,3 +80,6 @@ docker compose exec -T api /hlth-server create-admin || true
 echo
 echo "Готово. Адрес сервера для приложения:"
 echo "    https://$DOMAIN"
+echo
+echo "VPN (VLESS + WebSocket + TLS): ключ выдаётся в приложении (iOS → Профиль → Настройки → VPN)."
+echo "    Кому доступен: VPN_USERS в $VPNENV (* — всем; или логины через запятую)."

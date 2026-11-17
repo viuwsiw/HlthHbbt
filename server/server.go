@@ -89,6 +89,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /v1/messages", s.auth(s.sendMessage))
 	mux.HandleFunc("GET /v1/messages", s.auth(s.listMessages))
 	mux.HandleFunc("GET /v1/ws", s.ws)
+	mux.HandleFunc("GET /v1/vpn", s.auth(s.getVPN))
 	mux.HandleFunc("GET /v1/groups", s.auth(s.listGroups))
 	mux.HandleFunc("POST /v1/groups", s.auth(s.createGroup))
 	mux.HandleFunc("PUT /v1/groups/{id}", s.auth(s.updateGroup))

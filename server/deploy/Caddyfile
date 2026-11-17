@@ -1,7 +1,14 @@
 # HTTPS-сертификат Let's Encrypt выпускается автоматически для {$DOMAIN}.
 {$DOMAIN} {
-	encode gzip
-	reverse_proxy api:8080
+	# VPN (VLESS + WebSocket) — отдельный секретный путь, проксируется в Xray.
+	@vpn path {$VPN_PATH}
+	handle @vpn {
+		reverse_proxy xray:10000
+	}
+	handle {
+		encode gzip
+		reverse_proxy api:8080
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff

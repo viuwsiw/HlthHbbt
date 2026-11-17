@@ -2,21 +2,33 @@ services:
   api:
     build: ..
     restart: unless-stopped
+    env_file: .env
     volumes:
       - hlth-data:/data
     expose:
       - "8080"
     mem_limit: 256m
 
+  # VPN: VLESS + WebSocket, снаружи — тот же HTTPS 443 через Caddy (путь VPN_PATH).
+  xray:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    volumes:
+      - ./xray.json:/etc/xray/config.json:ro
+    expose:
+      - "10000"
+    mem_limit: 192m
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    depends_on: [api]
+    depends_on: [api, xray]
     ports:
       - "80:80"
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN}
+      VPN_PATH: ${VPN_PATH:-/vpn-disabled}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
