@@ -54,7 +54,7 @@ fun PrivacyScreen(onBack: () -> Unit, onPreview: (String) -> Unit, vm: PrivacyVi
         VSpace(16.dp)
         if (linked == null) {
             GlassCard(Modifier.fillMaxWidth()) {
-                Text("Сначала подключите мессенджер во вкладке «Чаты».", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                Text("Сначала подключите мессенджер во вкладке «Мессенджер».", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
             }
             return@Column
         }

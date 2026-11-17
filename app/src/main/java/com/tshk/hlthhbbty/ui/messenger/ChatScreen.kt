@@ -61,6 +61,9 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
     val profile by vm.profile.collectAsStateWithLifecycle()
     val safety by vm.safety.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val presenceMap by vm.presence.collectAsStateWithLifecycle()
+    val presence = presenceMap[vm.peer]
+    MessengerPresence(vm.m)
     var text by rememberSaveable { mutableStateOf("") }
     var showSecurity by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -72,11 +75,14 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
             GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
             Spacer(Modifier.width(12.dp))
             Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onOpenUser(vm.peer) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                UserAvatar(profile?.avatar?.ifBlank { null }, profile?.displayName ?: vm.peer, 40.dp)
+                Box {
+                    UserAvatar(profile?.avatar?.ifBlank { null }, profile?.displayName ?: vm.peer, 40.dp)
+                    StatusDot(presence?.status, 12.dp, Modifier.align(Alignment.BottomEnd))
+                }
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(profile?.displayName ?: "@${vm.peer}", style = MaterialTheme.typography.titleMedium, color = p.textPrimary, maxLines = 1)
-                    Text("@${vm.peer}", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                    Text(statusLabel(presence), style = MaterialTheme.typography.labelSmall, color = statusColor(presence?.status), maxLines = 1)
                 }
             }
             GlassIconButton(Icons.Rounded.Lock, "Шифрование", { showSecurity = true }, tint = p.accent)

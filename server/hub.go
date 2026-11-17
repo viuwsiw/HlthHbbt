@@ -12,8 +12,9 @@ import (
 
 // Hub рассылает события (новые сообщения) всем открытым WebSocket пользователя.
 type Hub struct {
-	mu    sync.Mutex
-	conns map[int64]map[*client]struct{}
+	mu     sync.Mutex
+	conns  map[int64]map[*client]struct{}
+	active map[int64]bool // открыт ли сейчас мессенджер у пользователя
 }
 
 type client struct {
@@ -21,7 +22,25 @@ type client struct {
 	c   *websocket.Conn
 }
 
-func newHub() *Hub { return &Hub{conns: map[int64]map[*client]struct{}{}} }
+func newHub() *Hub { return &Hub{conns: map[int64]map[*client]struct{}{}, active: map[int64]bool{}} }
+
+func (h *Hub) connected(uid int64) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.conns[uid]) > 0
+}
+
+func (h *Hub) isActive(uid int64) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.active[uid]
+}
+
+func (h *Hub) setActive(uid int64, v bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.active[uid] = v
+}
 
 func (h *Hub) add(uid int64, c *client) {
 	h.mu.Lock()
@@ -38,6 +57,7 @@ func (h *Hub) remove(uid int64, c *client) {
 	delete(h.conns[uid], c)
 	if len(h.conns[uid]) == 0 {
 		delete(h.conns, uid)
+		delete(h.active, uid) // нет соединений — «вне чата»
 	}
 }
 
@@ -72,7 +92,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}
 	cl := &client{out: make(chan any, 64), c: conn}
 	s.hub.add(u.ID, cl)
-	defer s.hub.remove(u.ID, cl)
+	defer func() {
+		s.hub.remove(u.ID, cl)
+		s.broadcastPresence(u.ID, u.Username) // отключился — собеседники увидят «вне чата»
+	}()
 	ctx := conn.CloseRead(r.Context()) // входящие не нужны, только ping/close
 	ping := time.NewTicker(25 * time.Second)
 	defer ping.Stop()

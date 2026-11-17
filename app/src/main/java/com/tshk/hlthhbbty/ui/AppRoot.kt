@@ -135,7 +135,7 @@ private val tabs = listOf(Routes.HOME, Routes.HABITS, Routes.CHATS, Routes.PROFI
 private val navItems = listOf(
     NavItem("Главная", Icons.Outlined.Home, Icons.Rounded.Home),
     NavItem("Привычки", Icons.Outlined.TaskAlt, Icons.Rounded.TaskAlt),
-    NavItem("Чаты", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Rounded.Chat),
+    NavItem("Мессенджер", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Rounded.Chat),
     NavItem("Профиль", Icons.Outlined.Person, Icons.Rounded.Person),
 )
 

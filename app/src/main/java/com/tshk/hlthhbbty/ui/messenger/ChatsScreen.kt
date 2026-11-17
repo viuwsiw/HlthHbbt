@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
@@ -79,8 +80,12 @@ fun ChatsScreen(
     val error by vm.error.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val localUsername by vm.localUsername.collectAsStateWithLifecycle()
+    val presence by vm.presence.collectAsStateWithLifecycle()
+    val myStatus by vm.myStatus.collectAsStateWithLifecycle()
+    var statusPicker by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     ReportScrollEnd(listState)
+    if (account != null) MessengerPresence(vm.m)
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -91,26 +96,39 @@ fun ChatsScreen(
         item {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.appear(0)) {
                 Column(Modifier.weight(1f)) {
-                    Text("Чаты", style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
+                    Text("Мессенджер", style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val (color, label) = when (state) {
-                            LinkState.ONLINE -> p.accent to "в сети"
-                            LinkState.CONNECTING -> p.textSecondary to "подключение…"
-                            LinkState.OFFLINE -> p.danger to "нет связи"
-                            LinkState.NOT_LINKED -> p.textSecondary to "не подключено"
+                        val label = when (state) {
+                            LinkState.ONLINE -> null
+                            LinkState.CONNECTING -> "подключение…"
+                            LinkState.OFFLINE -> "нет связи с сервером"
+                            LinkState.NOT_LINKED -> "не подключено"
                         }
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-                        Spacer(Modifier.width(6.dp))
-                        Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-                        Spacer(Modifier.width(10.dp))
+                        if (label != null) {
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                            Spacer(Modifier.width(10.dp))
+                        }
                         androidx.compose.material3.Icon(Icons.Rounded.Lock, null, tint = p.textSecondary, modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("сквозное шифрование", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
                     }
                 }
+                if (account != null) {
+                    // Мой статус: в мессенджере — «В сети» или «Не беспокоить»
+                    com.tshk.hlthhbbty.ui.glass.GlassSurface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), onClick = { statusPicker = true }) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            StatusDot(myStatus, 10.dp)
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (myStatus == "DND") "Не беспокоить" else "В сети", style = MaterialTheme.typography.labelLarge, color = p.textPrimary)
+                        }
+                    }
+                }
             }
         }
 
+        if (statusPicker) item {
+            StatusPicker(myStatus, onPick = { vm.setMyStatus(it) }, onDismiss = { statusPicker = false })
+        }
         when {
             server.isBlank() -> item { ServerSetupCard(onSave = vm::setServer) }
             account == null -> item { LinkCard(localUsername, busy, error, onLink = vm::link) }
@@ -122,7 +140,7 @@ fun ChatsScreen(
                     if (searching) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.accent) } }
                     else if (results.isEmpty()) item { Hint("Никого не нашли. Логин ищется с начала: @anton") }
                     itemsIndexed(results, key = { _, u -> "u_" + u.username }) { i, u ->
-                        PersonRow(u.avatar, u.displayName, "@${u.username}", null, false, Modifier.appear(i)) { onOpenUser(u.username) }
+                        PersonRow(u.avatar, u.displayName, "@${u.username}", null, false, Modifier.appear(i), status = (presence[u.username] ?: u.presence)?.status) { onOpenUser(u.username) }
                     }
                 } else {
                     if (conversations.isEmpty()) {
@@ -133,10 +151,45 @@ fun ChatsScreen(
                             avatar = "", name = "@" + c.row.peer,
                             subtitle = (if (c.row.lastOutgoing) "Вы: " else "") + c.row.lastText,
                             time = chatTime(c.row.lastAt), unread = c.unread, modifier = Modifier.appear(i + 2),
+                            status = presence[c.row.peer]?.status,
                         ) { onOpenChat(c.row.peer) }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StatusPicker(current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val p = Liquid.palette
+    com.tshk.hlthhbbty.ui.glass.GlassDialog(onDismiss = onDismiss, title = "Ваш статус", confirmText = "Готово", onConfirm = onDismiss) {
+        listOf("ONLINE" to "В сети", "DND" to "Не беспокоить").forEach { (key, title) ->
+            com.tshk.hlthhbbty.ui.glass.GlassSurface(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                onClick = { onPick(key) },
+            ) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(key, 14.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                        Text(
+                            if (key == "DND") "Собеседники видят красный статус, уведомления о сообщениях не приходят" else "Зелёный статус, пока вы в мессенджере",
+                            style = MaterialTheme.typography.labelSmall, color = p.textSecondary,
+                        )
+                    }
+                    if (current == key) androidx.compose.material3.Icon(Icons.Rounded.Check, null, tint = p.accent)
+                }
+            }
+        }
+        VSpace(8.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusDot("AWAY", 14.dp)
+            Spacer(Modifier.width(12.dp))
+            Text("«Вне чата» включается сам, когда вы вышли из мессенджера или закрыли приложение.",
+                style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
         }
     }
 }
@@ -148,11 +201,14 @@ private fun Hint(text: String) {
 }
 
 @Composable
-fun PersonRow(avatar: String, name: String, subtitle: String, time: String?, unread: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun PersonRow(avatar: String, name: String, subtitle: String, time: String?, unread: Boolean, modifier: Modifier = Modifier, status: String? = null, onClick: () -> Unit) {
     val p = Liquid.palette
     GlassCard(modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            UserAvatar(avatar.ifBlank { null }, name.removePrefix("@"), 46.dp)
+            Box {
+                UserAvatar(avatar.ifBlank { null }, name.removePrefix("@"), 46.dp)
+                if (status != null) StatusDot(status, 14.dp, Modifier.align(Alignment.BottomEnd))
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleSmall, color = p.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

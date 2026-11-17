@@ -49,6 +49,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /v1/me", s.auth(s.deleteMe))
 	mux.HandleFunc("PUT /v1/me/profile", s.auth(s.putProfile))
 	mux.HandleFunc("PUT /v1/me/key", s.auth(s.putKey))
+	mux.HandleFunc("PUT /v1/me/status", s.auth(s.putStatus))
+	mux.HandleFunc("PUT /v1/me/presence", s.auth(s.putPresence))
+	mux.HandleFunc("GET /v1/presence", s.auth(s.getPresence))
 	mux.HandleFunc("GET /v1/users/search", s.auth(s.search))
 	mux.HandleFunc("GET /v1/users/{username}", s.auth(s.userProfile))
 	mux.HandleFunc("GET /v1/contacts", s.auth(s.listContacts))
@@ -307,13 +310,16 @@ func (s *Server) loadProfile(owner, viewer int64) (map[string]any, error) {
 			}
 		}
 	}
+	st, seen := s.presenceOf(owner)
 	res := map[string]any{
+		"status": st, "lastSeen": seen,
 		"userId": owner, "username": username, "displayName": name, "avatar": avatar, "bio": bio,
 		"createdAt": created, "fields": visible, "hasKey": key != "",
 		"isContact": !self && s.isContact(viewer, owner), "isSelf": self,
 	}
 	if self {
 		res["discoverable"] = disc == 1
+		res["manualStatus"] = s.manualStatus(owner)
 	}
 	if key != "" {
 		res["publicKey"] = key
@@ -343,7 +349,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, u ctxUser) {
 		return
 	}
 	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q)
-	rows, err := s.db.Query(`SELECT username, display_name, avatar FROM users
+	rows, err := s.db.Query(`SELECT id, username, display_name, avatar FROM users
 		WHERE discoverable=1 AND id<>? AND (username LIKE ? ESCAPE '\' OR lower(display_name) LIKE ? ESCAPE '\')
 		ORDER BY (username=?) DESC, length(username) LIMIT 20`, u.ID, esc+"%", "%"+esc+"%", q)
 	if err != nil {
@@ -351,11 +357,21 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, u ctxUser) {
 		return
 	}
 	defer rows.Close()
-	users := []map[string]any{}
+	type row struct {
+		id         int64
+		un, dn, av string
+	}
+	var found []row
 	for rows.Next() {
-		var un, dn, av string
-		_ = rows.Scan(&un, &dn, &av)
-		users = append(users, map[string]any{"username": un, "displayName": dn, "avatar": av})
+		var r row
+		_ = rows.Scan(&r.id, &r.un, &r.dn, &r.av)
+		found = append(found, r)
+	}
+	rows.Close()
+	users := []map[string]any{}
+	for _, r := range found {
+		st, seen := s.presenceOf(r.id)
+		users = append(users, map[string]any{"username": r.un, "displayName": r.dn, "avatar": r.av, "status": st, "lastSeen": seen})
 	}
 	writeJSON(w, 200, map[string]any{"users": users})
 }
@@ -510,4 +526,110 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func fail(w http.ResponseWriter, code int, errCode, msg string) {
 	writeJSON(w, code, map[string]any{"error": errCode, "message": msg})
+}
+
+
+// ---------- статусы ----------
+
+const (
+	StatusOnline = "ONLINE" // в сети (вручную, пока пользователь в мессенджере)
+	StatusDND    = "DND"    // не беспокоить (вручную)
+	StatusAway   = "AWAY"   // вне чата (автоматически)
+)
+
+// activeWindow — сколько секунд после последнего сигнала «в мессенджере» считаем пользователя в сети.
+const activeWindow = 90
+
+func (s *Server) manualStatus(id int64) string {
+	var st string
+	if s.db.QueryRow(`SELECT status FROM users WHERE id=?`, id).Scan(&st) != nil || st == "" {
+		return StatusOnline
+	}
+	return st
+}
+
+// presenceOf — статус, который видят другие: DND (вручную) > ONLINE (активен в мессенджере) > AWAY.
+func (s *Server) presenceOf(id int64) (string, int64) {
+	var st string
+	var last int64
+	if s.db.QueryRow(`SELECT status, last_active FROM users WHERE id=?`, id).Scan(&st, &last) != nil {
+		return StatusAway, 0
+	}
+	if st == StatusDND {
+		return StatusDND, last
+	}
+	if s.hub.connected(id) && s.hub.isActive(id) && time.Now().Unix()-last <= activeWindow {
+		return StatusOnline, last
+	}
+	return StatusAway, last
+}
+
+func (s *Server) putStatus(w http.ResponseWriter, r *http.Request, u ctxUser) {
+	var req struct {
+		Status string `json:"status"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Status != StatusOnline && req.Status != StatusDND {
+		fail(w, 400, "bad_status", "Статус: ONLINE или DND")
+		return
+	}
+	_, _ = s.db.Exec(`UPDATE users SET status=? WHERE id=?`, req.Status, u.ID)
+	s.broadcastPresence(u.ID, u.Username)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// putPresence — клиент сообщает, открыт ли сейчас мессенджер (иначе — «вне чата»).
+func (s *Server) putPresence(w http.ResponseWriter, r *http.Request, u ctxUser) {
+	var req struct {
+		Active bool `json:"active"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	s.hub.setActive(u.ID, req.Active)
+	_, _ = s.db.Exec(`UPDATE users SET last_active=? WHERE id=?`, time.Now().Unix(), u.ID)
+	s.broadcastPresence(u.ID, u.Username)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// getPresence?u=a,b,c — статусы нескольких пользователей разом (для списка чатов).
+func (s *Server) getPresence(w http.ResponseWriter, r *http.Request, u ctxUser) {
+	res := map[string]any{}
+	for i, name := range strings.Split(r.URL.Query().Get("u"), ",") {
+		if i >= 100 {
+			break
+		}
+		name = strings.ToLower(strings.TrimSpace(name))
+		var id int64
+		if name == "" || s.db.QueryRow(`SELECT id FROM users WHERE username=?`, name).Scan(&id) != nil {
+			continue
+		}
+		st, seen := s.presenceOf(id)
+		res[name] = map[string]any{"status": st, "lastSeen": seen}
+	}
+	writeJSON(w, 200, map[string]any{"presence": res})
+}
+
+// broadcastPresence — разослать новый статус собеседникам и тем, у кого пользователь в контактах.
+func (s *Server) broadcastPresence(id int64, username string) {
+	st, seen := s.presenceOf(id)
+	ev := map[string]any{"type": "presence", "username": username, "status": st, "lastSeen": seen}
+	rows, err := s.db.Query(`
+		SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END FROM messages WHERE sender_id=? OR recipient_id=?
+		UNION SELECT owner_id FROM contacts WHERE contact_id=?`, id, id, id, id)
+	if err != nil {
+		return
+	}
+	var peers []int64
+	for rows.Next() {
+		var p int64
+		_ = rows.Scan(&p)
+		peers = append(peers, p)
+	}
+	rows.Close()
+	for _, p := range peers {
+		s.hub.send(p, ev)
+	}
 }

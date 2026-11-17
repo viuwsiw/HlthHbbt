@@ -55,6 +55,8 @@ fun UserProfileScreen(onBack: () -> Unit, onMessage: (String) -> Unit, vm: UserP
     val p = Liquid.palette
     val profile by vm.profile.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val presenceMap by vm.presence.collectAsStateWithLifecycle()
+    MessengerPresence(vm.m)
 
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
@@ -74,10 +76,15 @@ fun UserProfileScreen(onBack: () -> Unit, onMessage: (String) -> Unit, vm: UserP
         item {
             GlassCard(Modifier.fillMaxWidth().appear(0), contentPadding = PaddingValues(24.dp)) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    UserAvatar(u.avatar.ifBlank { null }, u.displayName, 100.dp)
+                    Box {
+                        UserAvatar(u.avatar.ifBlank { null }, u.displayName, 100.dp)
+                        StatusDot((presenceMap[u.username] ?: u.presence)?.status, 22.dp, Modifier.align(Alignment.BottomEnd))
+                    }
                     VSpace(12.dp)
                     Text(u.displayName, style = MaterialTheme.typography.headlineSmall, color = p.textPrimary)
                     Text("@${u.username}", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                    val pr = presenceMap[u.username] ?: u.presence
+                    Text(statusLabel(pr), style = MaterialTheme.typography.labelLarge, color = statusColor(pr?.status))
                     if (u.bio.isNotBlank()) {
                         VSpace(8.dp)
                         Text(u.bio, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary, textAlign = TextAlign.Center)

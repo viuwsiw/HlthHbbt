@@ -55,6 +55,15 @@ class MessengerRepository(
     @Volatile var openChat: String? = null
 
     private val keyCache = HashMap<String, String>()
+
+    /** Статусы собеседников (обновляются мгновенно по WebSocket). */
+    private val _presence = MutableStateFlow<Map<String, Presence>>(emptyMap())
+    val presence: StateFlow<Map<String, Presence>> = _presence.asStateFlow()
+    val myStatus get() = store.myStatus
+
+    // Сколько экранов мессенджера сейчас открыто: >0 — «в сети», 0 — «вне чата».
+    private var activeScreens = 0
+    private var presenceJob: Job? = null
     private val syncLock = Mutex()
     private var socket: WebSocket? = null
     private var wsJob: Job? = null
@@ -102,6 +111,7 @@ class MessengerRepository(
         store.setAccount(MessengerAccount(username, token))
         store.loadPrivacy(username)
         api.putKey(crypto.publicKey(username))
+        runCatching { api.setStatus(store.myStatus.value) }
         runCatching { pushProfile() }
         connect()
         runCatching { sync() }
@@ -142,7 +152,7 @@ class MessengerRepository(
         val acc = store.account.value ?: throw ApiException(0, "not_linked", "Мессенджер не подключён")
         val clean = text.trim().take(4000)
         if (clean.isEmpty()) return
-        val theirKey = peerKey(peer, refresh = true) ?: throw ApiException(0, "no_key", "@$peer ещё не включил шифрование — попросите его открыть «Чаты»")
+        val theirKey = peerKey(peer, refresh = true) ?: throw ApiException(0, "no_key", "@$peer ещё не включил шифрование — попросите его открыть «Мессенджер»")
         val myKey = crypto.publicKey(acc.username)
         val payload = JSONObject().put("v", 1).put("text", clean).toString()
         val clientId = UUID.randomUUID().toString()
@@ -192,7 +202,8 @@ class MessengerRepository(
         else if (openChat == peer) store.setLastRead(peer, m.id)
         else if (m.id > store.notifiedId) {
             store.notifiedId = m.id
-            incoming.value = IncomingEvent(peer, text ?: "Новое сообщение")
+            // «Не беспокоить» — без уведомлений
+            if (store.myStatus.value != "DND") incoming.value = IncomingEvent(peer, text ?: "Новое сообщение")
         }
     }
 
@@ -213,13 +224,19 @@ class MessengerRepository(
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         _state.value = LinkState.ONLINE
                         backoff = 1000L
-                        scope.launch { runCatching { sync() } }
+                        scope.launch {
+                            runCatching { sync() }
+                            if (activeScreens > 0) runCatching { api.setPresence(true) }
+                        }
                     }
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         val acc = store.account.value ?: return
                         runCatching {
                             val o = JSONObject(text)
-                            if (o.optString("type") == "message") {
+                            if (o.optString("type") == "presence") {
+                                val name = o.optString("username")
+                                MessengerApi.parsePresence(o)?.let { p -> _presence.value = _presence.value + (name to p) }
+                            } else if (o.optString("type") == "message") {
                                 val m = MessengerApi.parseMessage(o.getJSONObject("message"))
                                 scope.launch {
                                     process(acc.username, m)
@@ -248,6 +265,48 @@ class MessengerRepository(
         socket?.close(1000, null)
         socket = null
         wsJob?.cancel()
+    }
+
+    // ---------- статусы ----------
+
+    /** Экран мессенджера открыт. Пока открыт хотя бы один — «в сети» (с подтверждением раз в минуту). */
+    fun enterMessenger() {
+        activeScreens++
+        if (activeScreens == 1) {
+            presenceJob?.cancel()
+            presenceJob = scope.launch {
+                while (true) {
+                    if (store.account.value != null) runCatching { api.setPresence(true) }
+                    delay(60_000)
+                }
+            }
+        }
+    }
+
+    /** Экран мессенджера закрыт. Если ни одного не осталось — через пару секунд «вне чата». */
+    fun leaveMessenger() {
+        activeScreens = (activeScreens - 1).coerceAtLeast(0)
+        if (activeScreens == 0) {
+            presenceJob?.cancel()
+            presenceJob = scope.launch {
+                delay(2_000) // переход между экранами мессенджера не считается выходом
+                if (activeScreens == 0 && store.account.value != null) runCatching { api.setPresence(false) }
+            }
+        }
+    }
+
+    suspend fun setMyStatus(status: String) {
+        store.setMyStatus(status)
+        runCatching { api.setStatus(status) }
+    }
+
+    suspend fun refreshPresence(usernames: List<String>) {
+        val fresh = runCatching { api.presence(usernames) }.getOrNull() ?: return
+        _presence.value = _presence.value + fresh
+    }
+
+    fun rememberPresence(username: String, p: Presence?) {
+        if (p != null) _presence.value = _presence.value + (username to p)
     }
 
     // ---------- профиль и конфиденциальность ----------
@@ -303,8 +362,8 @@ class MessengerRepository(
 
     // ---------- поиск, профили, контакты ----------
 
-    suspend fun search(q: String) = api.search(q)
-    suspend fun profile(username: String) = api.profile(username)
+    suspend fun search(q: String) = api.search(q).also { list -> list.forEach { rememberPresence(it.username, it.presence) } }
+    suspend fun profile(username: String) = api.profile(username).also { rememberPresence(it.username, it.presence) }
     suspend fun addContact(username: String) = api.addContact(username)
     suspend fun removeContact(username: String) = api.removeContact(username)
     suspend fun contacts() = api.contacts()

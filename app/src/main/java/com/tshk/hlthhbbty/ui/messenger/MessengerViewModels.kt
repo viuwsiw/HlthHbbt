@@ -30,7 +30,10 @@ data class ConversationItem(val row: ConversationRow, val unread: Boolean)
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatsViewModel(private val c: AppContainer) : ViewModel() {
-    private val m = c.messenger
+    val m = c.messenger
+    val presence = m.presence
+    val myStatus = m.myStatus
+    fun setMyStatus(s: String) = viewModelScope.launch { m.setMyStatus(s) }
     val account = m.store.account
     val state = m.state
     val serverUrl = m.store.serverUrl
@@ -68,6 +71,12 @@ class ChatsViewModel(private val c: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch { if (account.value != null) runCatching { m.sync() } }
+        // Статусы собеседников из списка чатов
+        viewModelScope.launch {
+            conversations.map { list -> list.map { it.row.peer } }.distinctUntilChanged().collect { peers ->
+                if (peers.isNotEmpty()) m.refreshPresence(peers)
+            }
+        }
     }
 
     fun setServer(url: String) = m.store.setServerUrl(url)
@@ -90,7 +99,8 @@ class ChatsViewModel(private val c: AppContainer) : ViewModel() {
 }
 
 class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : ViewModel() {
-    private val m = c.messenger
+    val m = c.messenger
+    val presence = m.presence
     val peer: String = handle.get<String>("peer").orEmpty()
     val me = m.me
 
@@ -130,7 +140,8 @@ class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : Vie
 }
 
 class UserProfileViewModel(private val c: AppContainer, handle: SavedStateHandle) : ViewModel() {
-    private val m = c.messenger
+    val m = c.messenger
+    val presence = m.presence
     val username: String = handle.get<String>("username").orEmpty()
     private val _profile = MutableStateFlow<RemoteProfile?>(null)
     val profile: StateFlow<RemoteProfile?> = _profile.asStateFlow()

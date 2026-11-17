@@ -13,7 +13,10 @@ import java.util.concurrent.TimeUnit
 
 class ApiException(val code: Int, val error: String, message: String) : Exception(message)
 
-data class RemoteUser(val username: String, val displayName: String, val avatar: String)
+data class RemoteUser(val username: String, val displayName: String, val avatar: String, val presence: Presence? = null)
+
+/** Статус пользователя: ONLINE — в сети, DND — не беспокоить, AWAY — вне чата (автоматически). */
+data class Presence(val status: String, val lastSeen: Long)
 
 data class RemoteProfile(
     val username: String,
@@ -25,6 +28,8 @@ data class RemoteProfile(
     val publicKey: String?,
     val isContact: Boolean,
     val isSelf: Boolean,
+    val presence: Presence? = null,
+    val manualStatus: String? = null,
 )
 
 data class RemoteMessage(val id: Long, val from: String, val to: String, val ciphertext: String, val clientId: String, val createdAt: Long)
@@ -87,7 +92,16 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
             j.getString("username"), j.optString("displayName"), j.optString("avatar"), j.optString("bio"),
             j.optLong("createdAt"), j.optJSONObject("fields") ?: JSONObject(),
             j.optString("publicKey").takeIf { it.isNotBlank() }, j.optBoolean("isContact"), j.optBoolean("isSelf"),
+            parsePresence(j), j.optString("manualStatus").takeIf { it.isNotBlank() },
         )
+    }
+
+    suspend fun setStatus(status: String) = call("PUT", "/me/status", JSONObject().put("status", status))
+    suspend fun setPresence(active: Boolean) = call("PUT", "/me/presence", JSONObject().put("active", active))
+    suspend fun presence(usernames: List<String>): Map<String, Presence> {
+        if (usernames.isEmpty()) return emptyMap()
+        val obj = call("GET", "/presence?u=" + URLEncoder.encode(usernames.take(100).joinToString(","), "UTF-8")).optJSONObject("presence") ?: return emptyMap()
+        return obj.keys().asSequence().mapNotNull { k -> parsePresence(obj.optJSONObject(k))?.let { k to it } }.toMap()
     }
 
     suspend fun contacts(): List<RemoteUser> = call("GET", "/contacts").optJSONArray("contacts").users()
@@ -114,10 +128,13 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
     private fun JSONArray?.users(): List<RemoteUser> =
         if (this == null) emptyList() else (0 until length()).map {
             val o = getJSONObject(it)
-            RemoteUser(o.getString("username"), o.optString("displayName"), o.optString("avatar"))
+            RemoteUser(o.getString("username"), o.optString("displayName"), o.optString("avatar"), parsePresence(o))
         }
 
     companion object {
+        fun parsePresence(o: JSONObject?): Presence? =
+            o?.optString("status")?.takeIf { it.isNotBlank() }?.let { Presence(it, o.optLong("lastSeen")) }
+
         fun parseMessage(o: JSONObject) = RemoteMessage(
             o.getLong("id"), o.getString("from"), o.getString("to"), o.getString("ciphertext"), o.getString("clientId"), o.getLong("createdAt"),
         )

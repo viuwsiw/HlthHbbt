@@ -86,6 +86,11 @@ class MessengerStore(context: Context) {
         if (id > lastRead(peer)) prefs.edit().putLong("read_${_account.value?.username}_$peer", id).apply()
     }
 
+    private val _myStatus = MutableStateFlow(prefs.getString("my_status", "ONLINE") ?: "ONLINE")
+    /** Выбранный вручную статус: ONLINE или DND. */
+    val myStatus: StateFlow<String> = _myStatus.asStateFlow()
+    fun setMyStatus(s: String) { prefs.edit().putString("my_status", s).apply(); _myStatus.value = s }
+
     /** Последнее сообщение, о котором уже показано уведомление. */
     var notifiedId: Long
         get() = prefs.getLong("notified_${_account.value?.username}", 0)
