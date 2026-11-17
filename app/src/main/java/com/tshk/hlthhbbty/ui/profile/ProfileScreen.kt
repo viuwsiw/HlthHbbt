@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -95,7 +96,7 @@ fun ProfileScreen(
             Box(Modifier.appear(0)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(24.dp)) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    UserAvatar(user.avatar, user.displayName, 112.dp)
+                    UserAvatar(user.avatar, user.displayName, 112.dp, Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onEditProfile))
                     VSpace(14.dp)
                     Text(user.displayName, style = MaterialTheme.typography.headlineSmall, color = p.textPrimary, textAlign = TextAlign.Center)
                     Text("@${user.username}", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
@@ -125,48 +126,33 @@ fun ProfileScreen(
                 MenuDivider()
                 MenuRow(Icons.Rounded.EmojiEvents, "Достижения · ${s.achievementsUnlocked}/${s.achievementsTotal}", onClick = onAchievements)
                 MenuDivider()
-                MenuRow(Icons.Rounded.Edit, "Редактировать профиль", onClick = onEditProfile)
-                MenuDivider()
-                MenuRow(Icons.Rounded.Settings, "Настройки", onClick = onSettings)
-                MenuDivider()
                 MenuRow(Icons.Rounded.Extension, "Интеграции", onClick = onIntegrations)
                 MenuDivider()
-                MenuRow(Icons.Rounded.Key, "Сменить пароль", onClick = onChangePassword)
+                MenuRow(Icons.Rounded.Settings, "Настройки", onClick = onSettings)
             }
             }
         }
         item {
             Box(Modifier.appear(3)) {
             GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
-                MenuRow(Icons.Rounded.Share, "Поделиться прогрессом") {
-                    context.shareText(
-                        "Мой прогресс в HLTH HBTy: серия ${s.bestStreak} ${daysWord(s.bestStreak)}, " +
-                            "выпито %.1f л воды. Присоединяйся!".format(s.waterAllTimeMl / 1000f)
-                    )
-                }
+                MenuRow(Icons.Rounded.Edit, "Редактировать профиль", onClick = onEditProfile)
                 MenuDivider()
-                MenuRow(Icons.Rounded.MailOutline, "Написать разработчику") { context.sendFeedback() }
-            }
-            }
-        }
-        item {
-            Box(Modifier.appear(4)) {
-            GlassCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 6.dp)) {
-                MenuRow(Icons.AutoMirrored.Rounded.Logout, "Выйти из аккаунта", tint = p.textPrimary, chevron = false) { confirmLogout = true }
+                MenuRow(Icons.Rounded.Key, "Сменить пароль", onClick = onChangePassword)
                 MenuDivider()
-                MenuRow(Icons.Rounded.DeleteForever, "Удалить аккаунт", tint = p.danger, chevron = false) { confirmDelete = true }
+                MenuRow(Icons.AutoMirrored.Rounded.Logout, "Выйти из аккаунта", chevron = false) { confirmLogout = true }
             }
             }
         }
         item {
             Box(Modifier.appear(5)) {
-            Text(
-                "HLTH HBTy ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.labelMedium,
-                color = p.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("HLTH HBTy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                Text(
+                    "Удалить аккаунт",
+                    style = MaterialTheme.typography.labelMedium, color = p.danger.copy(alpha = 0.8f),
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { confirmDelete = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
             }
         }
     }

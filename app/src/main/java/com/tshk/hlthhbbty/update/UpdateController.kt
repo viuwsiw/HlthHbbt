@@ -19,7 +19,11 @@ sealed interface UpdateState {
 }
 
 /** Общее для всего приложения состояние обновления. */
-class UpdateController(private val repo: UpdateRepository, private val scope: CoroutineScope) {
+class UpdateController(
+    private val repo: UpdateRepository,
+    private val scope: CoroutineScope,
+    private val betaChannel: suspend () -> Boolean,
+) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
@@ -41,7 +45,7 @@ class UpdateController(private val repo: UpdateRepository, private val scope: Co
         lastCheck = System.currentTimeMillis()
         job = scope.launch {
             if (!silent) _state.value = UpdateState.Checking
-            repo.check()
+            repo.check(beta = betaChannel())
                 .onSuccess { info -> _state.value = if (info != null) UpdateState.Available(info) else if (silent) UpdateState.Idle else UpdateState.UpToDate }
                 .onFailure { if (!silent) _state.value = UpdateState.Failed(it.message ?: "Нет соединения") }
         }

@@ -25,7 +25,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
     override suspend fun doWork(): Result {
         val c = (applicationContext as HlthApp).container
         if (!c.settings.current().autoUpdate) return Result.success()
-        val info = c.updates.check().getOrNull() ?: return Result.success()
+        val info = c.updates.check(beta = c.settings.current().betaChannel).getOrNull() ?: return Result.success()
         if (!Notifications.canPost(applicationContext)) return Result.success()
         val open = PendingIntent.getActivity(
             applicationContext, 7,
@@ -34,7 +34,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
         )
         val n = NotificationCompat.Builder(applicationContext, Notifications.CHANNEL_ACHIEVEMENTS)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("Доступна версия ${info.versionName}")
+            .setContentTitle((if (info.beta) "Бета " else "Доступна версия ") + info.versionName)
             .setContentText("Нажмите, чтобы обновить HLTH HBTy")
             .setContentIntent(open)
             .setAutoCancel(true)

@@ -352,6 +352,13 @@ private fun MainScaffold() {
             )
         }
     }
+        // Обучение при первом входе / новой регистрации
+        val seen by appContainer.onboarding.seen.collectAsStateWithLifecycle()
+        val uid by appContainer.auth.currentUserId.collectAsStateWithLifecycle(null)
+        val id = uid
+        if (id != null && id.toString() !in seen) {
+            com.tshk.hlthhbbty.ui.onboarding.OnboardingOverlay(onDone = { appContainer.onboarding.markSeen(id) })
+        }
     }
 }
 

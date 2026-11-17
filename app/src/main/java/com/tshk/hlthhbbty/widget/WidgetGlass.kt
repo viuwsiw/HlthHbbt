@@ -81,3 +81,36 @@ fun glassBackground(c: WidgetColors, widthPx: Int, heightPx: Int, cornerPx: Floa
     canvas.drawRoundRect(rect, cornerPx, cornerPx, paint)
     return bmp
 }
+
+/** Кольцо прогресса для виджета (Glance не рисует дуги — делаем картинкой). */
+fun progressRing(c: WidgetColors, sizePx: Int, fraction: Float): Bitmap {
+    val s = sizePx.coerceIn(48, 400)
+    val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val stroke = s * 0.1f
+    val r = RectF(stroke / 2 + 1, stroke / 2 + 1, s - stroke / 2 - 1, s - stroke / 2 - 1)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = stroke; strokeCap = Paint.Cap.ROUND }
+    paint.color = c.circle.toArgb()
+    canvas.drawArc(r, 0f, 360f, false, paint)
+    if (fraction > 0f) {
+        paint.color = c.accent.toArgb()
+        canvas.drawArc(r, -90f, 360f * fraction.coerceIn(0f, 1f), false, paint)
+    }
+    return bmp
+}
+
+/** Тонкая полоса прогресса картинкой: ровно по ширине, со скруглёнными концами. */
+fun progressBar(c: WidgetColors, widthPx: Int, heightPx: Int, fraction: Float): Bitmap {
+    val w = widthPx.coerceIn(20, 1400)
+    val h = heightPx.coerceIn(2, 40)
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.color = c.circle.toArgb()
+    canvas.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), h / 2f, h / 2f, paint)
+    if (fraction > 0f) {
+        paint.color = c.accent.toArgb()
+        canvas.drawRoundRect(RectF(0f, 0f, maxOf(h.toFloat(), w * fraction.coerceIn(0f, 1f)), h.toFloat()), h / 2f, h / 2f, paint)
+    }
+    return bmp
+}

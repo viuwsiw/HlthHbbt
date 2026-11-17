@@ -56,13 +56,14 @@ class AppContainer(private val context: Context) {
     val health = HealthRepository(context, habits)
     val reminders = ReminderScheduler(context)
     val updates = com.tshk.hlthhbbty.update.UpdateRepository(context)
-    val updater = com.tshk.hlthhbbty.update.UpdateController(updates, scope)
+    val updater = com.tshk.hlthhbbty.update.UpdateController(updates, scope) { settings.current().betaChannel }
     val bedtime = com.tshk.hlthhbbty.bedtime.BedtimeChecker(context, habits)
     val walks = com.tshk.hlthhbbty.walk.WalkTracker(context, db.walkDao(), habits)
     /** Запрос «открыть экран прогулки» (нажатие на уведомление). */
     val walkOpenRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** Экран, который просит открыть виджет: focus / walk / habits. */
     val widgetRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val onboarding = com.tshk.hlthhbbty.onboarding.OnboardingStore(context)
     val focusTimer = com.tshk.hlthhbbty.focus.FocusTimer(context)
     val media = com.tshk.hlthhbbty.media.MediaRepository(context)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
@@ -76,6 +77,11 @@ class AppContainer(private val context: Context) {
             if (!prefs.getBoolean("defaults_101", false)) {
                 runCatching { habits.migrateDefaults() }
                 prefs.edit().putBoolean("defaults_101", true).apply()
+            }
+            // 1.0.3: кнопка багтрекера по умолчанию только у бета-тестеров — интерфейс чище.
+            if (!prefs.getBoolean("ux_103", false)) {
+                settings.update { it.copy(bugButton = it.betaChannel) }
+                prefs.edit().putBoolean("ux_103", true).apply()
             }
         }
         // Разблокировка, пока приложение живо — сразу пересчитываем «отбой».

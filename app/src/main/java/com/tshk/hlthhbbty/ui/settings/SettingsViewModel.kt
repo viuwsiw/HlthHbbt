@@ -38,6 +38,14 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
     fun setTheme(mode: ThemeMode) = update { it.copy(themeMode = mode) }
     fun setAccent(i: Int) = update { it.copy(accentIndex = i) }
     fun setAnimatedBackground(on: Boolean) = update { it.copy(animatedBackground = on) }
+    /** Бета-канал: включает и кнопку багтрекера, сразу проверяет обновления. */
+    fun setBetaChannel(on: Boolean) = viewModelScope.launch {
+        c.settings.update { it.copy(betaChannel = on, bugButton = on) }
+        c.updater.check()
+    }
+    fun replayOnboarding() = viewModelScope.launch {
+        c.auth.currentUserId.filterNotNull().first().let { c.onboarding.reset(it) }
+    }
     fun setBugButton(on: Boolean) = update { it.copy(bugButton = on) }
     fun setAutoUpdate(on: Boolean) = update { it.copy(autoUpdate = on) }
     val updater = c.updater

@@ -26,6 +26,8 @@ data class AppSettings(
     val autoUpdate: Boolean = true,
     val bugButton: Boolean = true,
     val animatedBackground: Boolean = false,
+    /** Канал автообновлений: false — релизы, true — беты (и релизы, если они новее). */
+    val betaChannel: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -40,6 +42,7 @@ class SettingsStore(private val context: Context) {
         val autoUpdate = booleanPreferencesKey("auto_update")
         val bugButton = booleanPreferencesKey("bug_button")
         val animatedBg = booleanPreferencesKey("animated_background")
+        val beta = booleanPreferencesKey("beta_channel")
         val seen = stringSetPreferencesKey("seen_achievements")
     }
 
@@ -66,6 +69,7 @@ class SettingsStore(private val context: Context) {
             prefs[K.autoUpdate] = s.autoUpdate
             prefs[K.bugButton] = s.bugButton
             prefs[K.animatedBg] = s.animatedBackground
+            prefs[K.beta] = s.betaChannel
         }
     }
 
@@ -78,7 +82,8 @@ class SettingsStore(private val context: Context) {
         waterToHour = this[K.to] ?: 21,
         healthConnect = this[K.health] ?: false,
         autoUpdate = this[K.autoUpdate] ?: true,
-        bugButton = this[K.bugButton] ?: true,
+        bugButton = this[K.bugButton] ?: false,
         animatedBackground = this[K.animatedBg] ?: false,
+        betaChannel = this[K.beta] ?: false,
     )
 }

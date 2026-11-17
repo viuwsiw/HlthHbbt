@@ -38,12 +38,18 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.tshk.hlthhbbty.HlthApp
 import com.tshk.hlthhbbty.R
-import com.tshk.hlthhbbty.util.greeting
 import com.tshk.hlthhbbty.util.scheduledOn
 import com.tshk.hlthhbbty.util.today
 import kotlinx.coroutines.flow.first
 
-private data class QuickData(val loggedIn: Boolean, val summary: String, val colors: WidgetColors)
+private data class QuickData(
+    val loggedIn: Boolean,
+    val waterMl: Int = 0,
+    val goalMl: Int = 2000,
+    val done: Int = 0,
+    val total: Int = 0,
+    val colors: WidgetColors,
+)
 
 /**
  * Виджет «Быстрые действия» в стиле стеклянной панели: сверху «пилюля» со сводкой дня,
@@ -61,51 +67,78 @@ class QuickWidget : GlanceAppWidget() {
     private suspend fun load(context: Context): QuickData {
         val c = (context.applicationContext as HlthApp).container
         val colors = widgetColors(widgetPalette(context, c.settings.current()))
-        val userId = c.auth.currentUserId.first() ?: return QuickData(false, "Войдите в HLTH HBTy", colors)
-        val user = c.users.observe(userId).first() ?: return QuickData(false, "Войдите в HLTH HBTy", colors)
+        val userId = c.auth.currentUserId.first() ?: return QuickData(false, colors = colors)
+        val user = c.users.observe(userId).first() ?: return QuickData(false, colors = colors)
         val day = today()
         val habits = c.habits.activeOnce(userId).filter { it.scheduledOn(day) }
         val done = habits.count { c.habits.countFor(it.id, day) >= it.goalPerDay }
         val water = c.water.todayOnce(userId)
-        val summary = "💧 %.1f / %.1f л  ·  ✅ %d из %d".format(water / 1000f, user.waterGoalMl / 1000f, done, habits.size)
-        return QuickData(true, summary, colors)
+        return QuickData(true, water, user.waterGoalMl, done, habits.size, colors)
     }
 
     @Composable
     private fun Content(d: QuickData, density: Float) {
         val c = d.colors
         val context = LocalContext.current
+        val size = androidx.glance.LocalSize.current
+        val roomy = size.height >= 165.dp // на высоком виджете — шапка и подписи кнопок
         GlassPanel(c, density) {
-            Column(GlanceModifier.fillMaxSize().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                // «Пилюля» со сводкой
+            Column(GlanceModifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                if (roomy) {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Image(ImageProvider(R.drawable.ic_stat_logo), null, GlanceModifier.size(14.dp), colorFilter = ColorFilter.tint(ColorProvider(c.sub)))
+                        Spacer(GlanceModifier.width(6.dp))
+                        Text("HLTH HBTy", style = TextStyle(color = ColorProvider(c.sub), fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                            modifier = GlanceModifier.defaultWeight())
+                        Text(java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ru"))),
+                            style = TextStyle(color = ColorProvider(c.sub), fontSize = 11.sp))
+                    }
+                    Spacer(GlanceModifier.height(10.dp))
+                }
+                // Сводка: кольцо воды + привычки
                 Row(
-                    GlanceModifier.fillMaxWidth().height(52.dp).cornerRadius(26.dp).background(ColorProvider(c.pill))
-                        .padding(horizontal = 16.dp)
-                        .clickable(actionStartActivity(openRoute(context, null))),
+                    GlanceModifier.fillMaxWidth().clickable(actionStartActivity(openRoute(context, null))),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(ImageProvider(R.drawable.ic_stat_logo), null, GlanceModifier.size(22.dp), colorFilter = ColorFilter.tint(ColorProvider(c.icon)))
+                    val frac = if (d.goalMl > 0) d.waterMl.toFloat() / d.goalMl else 0f
+                    Box(GlanceModifier.size(46.dp), contentAlignment = Alignment.Center) {
+                        Image(ImageProvider(progressRing(c, (46 * density).toInt(), frac)), null, GlanceModifier.size(46.dp))
+                        Image(ImageProvider(R.drawable.ic_w_water), null, GlanceModifier.size(18.dp), colorFilter = ColorFilter.tint(ColorProvider(c.accent)))
+                    }
                     Spacer(GlanceModifier.width(12.dp))
                     Column(GlanceModifier.defaultWeight()) {
-                        Text(if (d.loggedIn) greeting() else "HLTH HBTy", style = TextStyle(color = ColorProvider(c.sub), fontSize = 11.sp))
-                        Text(d.summary, maxLines = 1, style = TextStyle(color = ColorProvider(c.text), fontSize = 14.sp, fontWeight = FontWeight.Medium))
+                        Text("Вода", style = TextStyle(color = ColorProvider(c.sub), fontSize = 11.sp))
+                        Text(if (d.loggedIn) "%.1f из %.1f л".format(d.waterMl / 1000f, d.goalMl / 1000f) else "Войдите в приложение",
+                            maxLines = 1, style = TextStyle(color = ColorProvider(c.text), fontSize = 16.sp, fontWeight = FontWeight.Bold))
+                    }
+                    if (d.loggedIn) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Привычки", style = TextStyle(color = ColorProvider(c.sub), fontSize = 11.sp))
+                            Text("${d.done} из ${d.total}", style = TextStyle(color = ColorProvider(c.text), fontSize = 16.sp, fontWeight = FontWeight.Bold))
+                        }
                     }
                 }
-                Spacer(GlanceModifier.height(12.dp))
+                Spacer(GlanceModifier.defaultWeight())
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                        GlassCircle(c, R.drawable.ic_w_water, "+250 мл воды", actionRunCallback<AddWaterAction>(), tint = c.accent)
-                    }
-                    Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                        GlassCircle(c, R.drawable.ic_w_timer, "Фокус", actionStartActivity(openRoute(context, "focus")))
-                    }
-                    Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                        GlassCircle(c, R.drawable.ic_w_walk, "Прогулка", actionStartActivity(openRoute(context, "walk")))
-                    }
-                    Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                        GlassCircle(c, R.drawable.ic_w_check, "Привычки", actionStartActivity(openRoute(context, "habits")))
-                    }
+                    Action(c, R.drawable.ic_w_water, "Вода", actionRunCallback<AddWaterAction>(), roomy, c.accent)
+                    Action(c, R.drawable.ic_w_timer, "Фокус", actionStartActivity(openRoute(context, "focus")), roomy)
+                    Action(c, R.drawable.ic_w_route, "Прогулка", actionStartActivity(openRoute(context, "walk")), roomy)
+                    Action(c, R.drawable.ic_w_check, "Привычки", actionStartActivity(openRoute(context, "habits")), roomy)
                 }
+            }
+        }
+    }
+
+    @Composable
+    private fun androidx.glance.layout.RowScope.Action(
+        c: WidgetColors, icon: Int, label: String, action: androidx.glance.action.Action, showLabel: Boolean,
+        tint: androidx.compose.ui.graphics.Color = c.icon,
+    ) {
+        Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            GlassCircle(c, icon, label, action, size = 44.dp, tint = tint)
+            if (showLabel) {
+                Spacer(GlanceModifier.height(4.dp))
+                Text(label, maxLines = 1, style = TextStyle(color = ColorProvider(c.sub), fontSize = 10.sp))
             }
         }
     }

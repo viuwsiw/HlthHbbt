@@ -57,6 +57,7 @@ class AuthViewModel(private val c: AppContainer) : ViewModel() {
             _state.update {
                 when (result) {
                     is AuthResult.Success -> {
+                        if (s.isRegister) c.onboarding.reset(result.userId)
                         viewModelScope.launch { c.settings.update { st -> st.copy(autoUpdate = true) } }
                         AuthUiState()
                     }

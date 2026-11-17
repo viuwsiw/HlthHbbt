@@ -20,6 +20,7 @@ data class UpdateInfo(
     val apkUrl: String,
     val changelog: String,
     val sizeBytes: Long?,
+    val beta: Boolean = false,
 )
 
 /**
@@ -32,13 +33,20 @@ class UpdateRepository(private val context: Context) {
     private val owner = "viuwsiw"
     private val repo = "HlthHbbt"
 
-    suspend fun check(): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
+    /**
+     * Проверка обновлений по каналу. Релизный: GitHub Release + update.json.
+     * Бета: дополнительно update-beta.json — ставится то, что новее (бета или релиз).
+     */
+    suspend fun check(beta: Boolean = false): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
             val candidates = listOfNotNull(
                 runCatching { fromRelease() }.getOrNull(),
-                runCatching { fromManifest() }.getOrNull(),
+                runCatching { fromManifest("update.json", beta = false) }.getOrNull(),
+                if (beta) runCatching { fromManifest("update-beta.json", beta = true) }.getOrNull() else null,
             )
-            candidates.filter { isNewer(it) }.maxWithOrNull { a, b -> compareVersions(a.versionName, b.versionName) }
+            candidates.filter { isNewer(it) }.maxWithOrNull(
+                compareBy<UpdateInfo> { it.versionCode ?: 0 }.thenComparator { a, b -> compareVersions(a.versionName, b.versionName) }
+            )
         }
     }
 
@@ -56,11 +64,11 @@ class UpdateRepository(private val context: Context) {
         )
     }
 
-    private fun fromManifest(): UpdateInfo? {
+    private fun fromManifest(file: String, beta: Boolean): UpdateInfo? {
         // API GitHub отдаёт свежий файл; raw-ссылка кэшируется CDN до 5 минут — она запасная.
         val text = runCatching {
-            httpGet("https://api.github.com/repos/$owner/$repo/contents/update.json", accept = "application/vnd.github.raw+json")
-        }.getOrNull() ?: httpGet("https://raw.githubusercontent.com/$owner/$repo/HEAD/update.json?t=${System.currentTimeMillis()}")
+            httpGet("https://api.github.com/repos/$owner/$repo/contents/$file", accept = "application/vnd.github.raw+json")
+        }.getOrNull() ?: httpGet("https://raw.githubusercontent.com/$owner/$repo/HEAD/$file?t=${System.currentTimeMillis()}")
         val json = JSONObject(text ?: return null)
         return UpdateInfo(
             versionName = json.getString("versionName"),
@@ -68,6 +76,7 @@ class UpdateRepository(private val context: Context) {
             apkUrl = json.getString("apkUrl"),
             changelog = json.optString("changelog").trim(),
             sizeBytes = json.optLong("size").takeIf { it > 0 },
+            beta = beta,
         )
     }
 

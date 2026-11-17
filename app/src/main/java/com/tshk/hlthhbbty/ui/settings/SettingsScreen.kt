@@ -1,6 +1,12 @@
 package com.tshk.hlthhbbty.ui.settings
 
 import android.Manifest
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.ui.graphics.graphicsLayer
+import com.tshk.hlthhbbty.util.sendFeedback
+import com.tshk.hlthhbbty.util.shareText
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -98,10 +104,11 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
         VSpace(12.dp)
         ScreenHeader("Настройки", onBack)
         VSpace(20.dp)
+        // Открыта только одна группа — экран не перегружен.
+        var open by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        val toggle: (String) -> Unit = { key -> open = if (open == key) null else key }
 
-        GlassCard(Modifier.fillMaxWidth()) {
-            SectionTitle("Оформление")
-            VSpace(12.dp)
+        SettingsGroup("🎨", "Оформление", "Тема, акцент, фон", open == "look", { toggle("look") }) {
             GlassSegmented(ThemeMode.entries.map { it.title }, s.themeMode.ordinal, { vm.setTheme(ThemeMode.entries[it]) })
             VSpace(16.dp)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -142,10 +149,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
                 }
             }
         }
-        VSpace(16.dp)
-
-        GlassCard(Modifier.fillMaxWidth()) {
-            SectionTitle("Уведомления")
+        VSpace(12.dp)
+        SettingsGroup("🔔", "Уведомления", if (s.waterReminders) "Вода: каждые ${s.waterIntervalHours} ч" else "Напоминания и вода", open == "notif", { toggle("notif") }) {
             if (!notifAllowed) {
                 VSpace(8.dp)
                 Text("Уведомления выключены — напоминания не будут приходить.", style = MaterialTheme.typography.bodySmall, color = p.danger)
@@ -186,10 +191,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             VSpace(8.dp)
             Text("Напоминания для отдельных привычек настраиваются в самой привычке.", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
         }
-        VSpace(16.dp)
-
-        GlassCard(Modifier.fillMaxWidth()) {
-            SectionTitle("Health Connect")
+        VSpace(12.dp)
+        SettingsGroup("❤️", "Health Connect", if (s.healthConnect && healthGranted) "Подключено" else "Шаги и сон", open == "health", { toggle("health") }) {
             VSpace(6.dp)
             Text(
                 "Шаги и сон подтягиваются автоматически, а привычки с автоцелью отмечаются сами.",
@@ -209,10 +212,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
                 else -> GlassButton("Подключить", { healthLauncher.launch(vm.healthPermissions) }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Favorite)
             }
         }
-        VSpace(16.dp)
-
-        GlassCard(Modifier.fillMaxWidth()) {
-            SectionTitle("Данные")
+        VSpace(12.dp)
+        SettingsGroup("💾", "Данные", "Экспорт и импорт", open == "data", { toggle("data") }) {
             VSpace(6.dp)
             Text("Сохраните прогресс в файл, чтобы перенести его на новый телефон.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
             VSpace(12.dp)
@@ -223,25 +224,10 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             VSpace(8.dp)
             Text("Импорт заменит текущие привычки, воду и заметки.", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
         }
-        VSpace(16.dp)
-
-        GlassCard(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("🐞 Кнопка багтрекера", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
-                    Text("Маленькая кнопка сбоку экрана для отчёта об ошибке", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
-                }
-                Switch(s.bugButton, vm::setBugButton, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
-            }
-        }
-        VSpace(16.dp)
-
+        VSpace(12.dp)
         val upd by vm.updater.state.collectAsStateWithLifecycle()
-        GlassCard(Modifier.fillMaxWidth()) {
-            SectionTitle("Обновления") {
-                Text("v${com.tshk.hlthhbbty.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
-            }
-            VSpace(10.dp)
+        SettingsGroup("⬇️", "Обновления", "v${com.tshk.hlthhbbty.BuildConfig.VERSION_NAME} · " + if (s.betaChannel) "бета-канал" else "релизы",
+            open == "updates", { toggle("updates") }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Проверять автоматически", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
@@ -269,19 +255,92 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
                     loading = upd is com.tshk.hlthhbbty.update.UpdateState.Checking)
             }
         }
-        VSpace(16.dp)
-        ChangelogCard()
+        VSpace(12.dp)
+        SettingsGroup("🧪", "Бета-тестирование", if (s.betaChannel) "Вы бета-тестер" else "Ранний доступ к новым версиям", open == "beta", { toggle("beta") }) {
+            Text(
+                "Бета-версии выходят раньше релизов и приходят тем же автообновлением из GitHub. " +
+                    "В них могут быть ошибки — сообщайте о них кнопкой 🐞.",
+                style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
+            )
+            VSpace(12.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Бета-канал", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text(if (s.betaChannel) "Получаете беты и релизы — что новее" else "Сейчас: только релизы", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(s.betaChannel, vm::setBetaChannel, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+            if (s.betaChannel) {
+                VSpace(10.dp)
+                Text("Если вернуться на релизы, бета останется установленной, пока не выйдет релиз новее.",
+                    style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+            }
+        }
+        VSpace(12.dp)
+        SettingsGroup("ℹ️", "О приложении", "Что нового, обучение, связь", open == "about", { toggle("about") }) {
+            ChangelogContent()
+            VSpace(14.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("🐞 Кнопка багтрекера", style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    Text("Сбоку экрана, для отчёта об ошибке", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                }
+                Switch(s.bugButton, vm::setBugButton, colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+            }
+            VSpace(12.dp)
+            GlassButton("Показать обучение ещё раз", vm::replayOnboarding, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary)
+            VSpace(10.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassButton("Написать нам", { context.sendFeedback() }, Modifier.weight(1f), style = GlassButtonStyle.Secondary)
+                GlassButton("Поделиться", { context.shareText("HLTH HBTy — трекер полезных привычек: https://github.com/viuwsiw/HlthHbbt") },
+                    Modifier.weight(1f), style = GlassButtonStyle.Secondary)
+            }
+        }
         VSpace(32.dp)
     }
 }
 
+/** Раскрывающаяся группа настроек: заголовок с иконкой и кратким статусом. */
 @Composable
-private fun ChangelogCard() {
+private fun SettingsGroup(
+    emoji: String,
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    val p = Liquid.palette
+    val rotation by androidx.compose.animation.core.animateFloatAsState(if (expanded) 180f else 0f, label = "chev")
+    GlassCard(Modifier.fillMaxWidth().animateContentSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(emoji, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                Text(summary, style = MaterialTheme.typography.labelMedium, color = p.textSecondary, maxLines = 1)
+            }
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.Rounded.KeyboardArrowDown, null, tint = p.textSecondary,
+                modifier = Modifier.graphicsLayer { rotationZ = rotation },
+            )
+        }
+        if (expanded) {
+            Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp), content = content)
+        }
+    }
+}
+
+@Composable
+private fun ChangelogContent() {
     val p = Liquid.palette
     var showAll by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val entries = com.tshk.hlthhbbty.data.Changelog.entries
-    GlassCard(Modifier.fillMaxWidth()) {
-        SectionTitle("Что нового")
+    Column {
+        Text("Что нового", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
         VSpace(10.dp)
         (if (showAll) entries else entries.take(1)).forEachIndexed { i, e ->
             if (i > 0) VSpace(14.dp)
