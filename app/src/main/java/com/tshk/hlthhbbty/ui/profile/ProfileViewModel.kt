@@ -32,6 +32,7 @@ data class ProfileState(
     val plannedToday: Int = 0,
     val achievementsUnlocked: Int = 0,
     val achievementsTotal: Int = 0,
+    val bio: String = "",
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,6 +55,7 @@ class ProfileViewModel(private val c: AppContainer) : ViewModel() {
                 plannedToday = planned.size,
                 achievementsUnlocked = achievements.count { it.unlocked },
                 achievementsTotal = achievements.size,
+                bio = c.messenger.store.privacy.value.bio,
             )
         }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileState())

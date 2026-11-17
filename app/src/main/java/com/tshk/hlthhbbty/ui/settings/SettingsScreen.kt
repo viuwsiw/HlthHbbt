@@ -213,7 +213,38 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel(factory
             }
         }
         VSpace(12.dp)
-        SettingsGroup("💾", "Данные", "Экспорт и импорт", open == "data", { toggle("data") }) {
+        val cloudState by vm.cloudState.collectAsStateWithLifecycle()
+        val cloudLastAt by vm.cloudLastAt.collectAsStateWithLifecycle()
+        val cloudBusy by vm.cloudBusy.collectAsStateWithLifecycle()
+        val cloudSummary = when (cloudState) {
+            com.tshk.hlthhbbty.cloud.BackupState.IDLE, com.tshk.hlthhbbty.cloud.BackupState.SYNCING ->
+                if (cloudLastAt > 0) "Облако: " + com.tshk.hlthhbbty.ui.messenger.chatTime(cloudLastAt) else "Облако включено"
+            com.tshk.hlthhbbty.cloud.BackupState.NEEDS_PASSWORD -> "Облако: нужен пароль"
+            com.tshk.hlthhbbty.cloud.BackupState.ERROR -> "Облако: ошибка"
+            else -> "Экспорт и импорт"
+        }
+        SettingsGroup("💾", "Данные", cloudSummary, open == "data", { toggle("data") }) {
+            Text("☁️ Облачная копия", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+            VSpace(4.dp)
+            Text(
+                "Оформление, профиль, привычки, вода, заметки, прогулки и ключ переписки. Шифруется на телефоне ключом из пароля — сервер не может её прочитать. Восстанавливается при входе на любом телефоне.",
+                style = MaterialTheme.typography.labelSmall, color = p.textSecondary,
+            )
+            VSpace(10.dp)
+            when (cloudState) {
+                com.tshk.hlthhbbty.cloud.BackupState.NEEDS_PASSWORD -> {
+                    var pwd by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+                    com.tshk.hlthhbbty.ui.glass.GlassTextField(pwd, { pwd = it }, "Пароль от аккаунта", isPassword = true)
+                    VSpace(8.dp)
+                    GlassButton("Включить облачную копию", { vm.enableCloud(pwd) }, Modifier.fillMaxWidth(), loading = cloudBusy, enabled = pwd.length >= 6)
+                }
+                com.tshk.hlthhbbty.cloud.BackupState.OFF -> Text("Войдите в аккаунт, чтобы включить", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                else -> GlassButton("Сохранить сейчас", vm::backupNow, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary,
+                    loading = cloudBusy || cloudState == com.tshk.hlthhbbty.cloud.BackupState.SYNCING)
+            }
+            VSpace(16.dp)
+            Text("📄 Файл", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+            VSpace(6.dp)
             VSpace(6.dp)
             Text("Сохраните прогресс в файл, чтобы перенести его на новый телефон.", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
             VSpace(12.dp)

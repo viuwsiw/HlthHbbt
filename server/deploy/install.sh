@@ -47,5 +47,10 @@ for i in $(seq 1 30); do
   echo -n "."; sleep 3
 done
 echo
+echo
+echo "==> Аккаунт администратора"
+sleep 2
+docker compose exec -T api /hlth-server create-admin || true
+echo
 echo "Готово. Адрес сервера для приложения:"
 echo "    https://$DOMAIN"

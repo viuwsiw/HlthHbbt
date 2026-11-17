@@ -22,6 +22,7 @@ data class EditProfileState(
     val gender: Gender? = null,
     val avatar: String? = null,
     val waterGoalMl: Int = 2000,
+    val bio: String = "",
     val saving: Boolean = false,
     val importing: Boolean = false,
     val errors: Map<String, String> = emptyMap(),
@@ -49,6 +50,7 @@ class EditProfileViewModel(private val c: AppContainer) : ViewModel() {
                 gender = user.gender,
                 avatar = user.avatar ?: "preset:0",
                 waterGoalMl = user.waterGoalMl,
+                bio = c.messenger.store.also { it.loadPrivacy(user.username) }.privacy.value.bio,
             )
         }
     }
@@ -57,6 +59,7 @@ class EditProfileViewModel(private val c: AppContainer) : ViewModel() {
     fun onAge(v: String) = _state.update { it.copy(age = v.filter(Char::isDigit).take(3), errors = it.errors - "age") }
     fun onGender(g: Gender) = _state.update { it.copy(gender = g) }
     fun onWaterGoal(ml: Int) = _state.update { it.copy(waterGoalMl = ml) }
+    fun onBio(v: String) = _state.update { it.copy(bio = v.take(160)) }
 
     fun onPreset(avatar: String) {
         discardTemp(_state.value.avatar)
@@ -86,6 +89,11 @@ class EditProfileViewModel(private val c: AppContainer) : ViewModel() {
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             c.users.updateProfile(s.userId, s.name, age, s.gender, s.avatar, s.waterGoalMl)
+            // «О себе» хранится вместе с настройками конфиденциальности и уходит на страницу в мессенджере.
+            val store = c.messenger.store
+            store.savePrivacy(s.username, store.privacy.value.copy(bio = s.bio.trim()))
+            runCatching { c.messenger.pushProfile() }
+            c.backupSoon()
             originalAvatar = s.avatar
             _state.update { it.copy(saving = false, saved = true) }
         }

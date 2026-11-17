@@ -102,6 +102,10 @@ fun ProfileScreen(
                     VSpace(14.dp)
                     Text(user.displayName, style = MaterialTheme.typography.headlineSmall, color = p.textPrimary, textAlign = TextAlign.Center)
                     Text("@${user.username}", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                    if (s.bio.isNotBlank()) {
+                        VSpace(8.dp)
+                        Text(s.bio, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary, textAlign = TextAlign.Center)
+                    }
                     VSpace(14.dp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         user.age?.let { GlassChip("$it ${yearsWord(it)}", leading = "🎂") }

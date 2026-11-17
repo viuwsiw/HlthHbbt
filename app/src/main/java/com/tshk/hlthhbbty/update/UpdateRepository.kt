@@ -80,6 +80,15 @@ class UpdateRepository(private val context: Context) {
         )
     }
 
+    /** Опубликованные версии по каналам — для админ-панели. */
+    suspend fun channels(): Map<String, UpdateInfo?> = withContext(Dispatchers.IO) {
+        mapOf(
+            "release" to runCatching { fromManifest("update.json", beta = false) }.getOrNull(),
+            "beta" to runCatching { fromManifest("update-beta.json", beta = true) }.getOrNull(),
+            "githubRelease" to runCatching { fromRelease() }.getOrNull(),
+        )
+    }
+
     private fun isNewer(info: UpdateInfo): Boolean =
         info.versionCode?.let { it > BuildConfig.VERSION_CODE }
             ?: (compareVersions(info.versionName, BuildConfig.VERSION_NAME) > 0)

@@ -85,6 +85,11 @@ fun UserProfileScreen(onBack: () -> Unit, onMessage: (String) -> Unit, vm: UserP
                     Text("@${u.username}", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
                     val pr = presenceMap[u.username] ?: u.presence
                     Text(statusLabel(pr), style = MaterialTheme.typography.labelLarge, color = statusColor(pr?.status))
+                    pr?.nowPlaying?.let { np ->
+                        VSpace(4.dp)
+                        Text("🎵 ${np.title}" + (if (np.artist.isNotBlank()) " — ${np.artist}" else "") + (if (np.app.isNotBlank()) " · ${np.app}" else ""),
+                            style = MaterialTheme.typography.labelMedium, color = p.accent, textAlign = TextAlign.Center)
+                    }
                     if (u.bio.isNotBlank()) {
                         VSpace(8.dp)
                         Text(u.bio, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary, textAlign = TextAlign.Center)

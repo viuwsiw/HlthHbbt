@@ -53,6 +53,21 @@ class E2eCrypto(private val context: Context) {
         String(dec.decrypt(Base64.decode(ciphertext, Base64.NO_WRAP), context(from, to)))
     }.getOrNull()
 
+    /** Закрытый ключ для облачной копии (копия шифруется ключом из пароля — сервер его не видит). */
+    fun exportPrivateKey(username: String): ByteArray =
+        TinkProtoKeysetFormat.serializeKeyset(privateHandle(username), com.google.crypto.tink.InsecureSecretKeyAccess.get())
+
+    /** Восстановление ключа из облачной копии: старые сообщения снова читаются. */
+    fun importPrivateKey(username: String, keyset: ByteArray) {
+        val handle = TinkProtoKeysetFormat.parseKeyset(keyset, com.google.crypto.tink.InsecureSecretKeyAccess.get())
+        val masterUri = "android-keystore://hlth_e2e_master"
+        com.google.crypto.tink.integration.android.AndroidKeystoreKmsClient.getOrGenerateNewAeadKey(masterUri)
+        val master = com.google.crypto.tink.integration.android.AndroidKeystoreKmsClient().getAead(masterUri)
+        @Suppress("DEPRECATION")
+        handle.write(com.google.crypto.tink.integration.android.SharedPrefKeysetWriter(context, "e2e_keyset_$username", "hlth_e2e"), master)
+        handles.remove(username)
+    }
+
     /** Шифрование файла: случайный ключ AES-256 и nonce на каждый файл. Возвращает (шифротекст, ключ, nonce). */
     fun encryptFile(plain: ByteArray): Triple<ByteArray, String, String> {
         val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }

@@ -72,6 +72,22 @@ func (h *Hub) send(uid int64, ev any) {
 	}
 }
 
+func (h *Hub) onlineCount() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.conns)
+}
+
+func (h *Hub) closeAll() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, set := range h.conns {
+		for c := range set {
+			_ = c.c.Close(websocket.StatusGoingAway, "server reset")
+		}
+	}
+}
+
 func (h *Hub) closeUser(uid int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

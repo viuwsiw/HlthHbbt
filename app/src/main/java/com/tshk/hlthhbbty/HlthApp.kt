@@ -58,7 +58,7 @@ class AppContainer(private val context: Context) {
     val water = WaterRepository(db.waterDao())
     val notes = NoteRepository(db.noteDao())
     val users = UserRepository(context, db.userDao())
-    val auth: AuthRepository = AuthRepository(db.userDao(), SessionStore(context), habits) { messenger }
+    val auth: AuthRepository = AuthRepository(db.userDao(), SessionStore(context), habits, { messenger }, { cloud })
     val history = HistoryRepository(users, habits, water, notes)
     val backup = BackupRepository(context, db)
     val health = HealthRepository(context, habits)
@@ -76,6 +76,18 @@ class AppContainer(private val context: Context) {
         localUser = { auth.currentUserId.first()?.let { db.userDao().findById(it) } },
         history = { history.once(it) },
     )
+    val cloud: com.tshk.hlthhbbty.cloud.CloudBackup = com.tshk.hlthhbbty.cloud.CloudBackup(context, db, settings, backup) { messenger }
+    private var cloudJob: kotlinx.coroutines.Job? = null
+
+    /** Облачная копия через 15 секунд после последнего изменения. */
+    fun backupSoon() {
+        cloudJob?.cancel()
+        cloudJob = scope.launch {
+            kotlinx.coroutines.delay(15_000)
+            auth.currentUserId.first()?.let { runCatching { cloud.backupNow(it) } }
+        }
+    }
+
     val onboarding = com.tshk.hlthhbbty.onboarding.OnboardingStore(context)
     val focusTimer = com.tshk.hlthhbbty.focus.FocusTimer(context)
     val media = com.tshk.hlthhbbty.media.MediaRepository(context)
@@ -86,6 +98,7 @@ class AppContainer(private val context: Context) {
     fun start() {
         // Мессенджер и аккаунты: перенос локальных аккаунтов на сервер, запуск, уведомления, фоновая синхронизация.
         messenger.start()
+        messenger.onPrivacyChanged = { backupSoon() }
         scope.launch { runCatching { auth.migrateLocalAccounts(auth.currentUserId.first()) } }
         com.tshk.hlthhbbty.messenger.MessengerSyncWorker.schedule(context)
         scope.launch {
@@ -132,6 +145,23 @@ class AppContainer(private val context: Context) {
                 HabitsWidget.refresh(context)
             }
         }
+        // Любая смена настроек — в облачную копию.
+        scope.launch { settings.settings.distinctUntilChanged().drop(1).collect { backupSoon() } }
+        // Состояние копии для экрана настроек
+        scope.launch {
+            kotlinx.coroutines.flow.combine(auth.currentUserId, messenger.store.account) { id, _ -> id }.collect { id ->
+                cloud.refreshState(id?.let { db.userDao().findById(it)?.username })
+            }
+        }
+        // Что сейчас играет — собеседникам (если разрешено конфиденциальностью)
+        scope.launch {
+            kotlinx.coroutines.flow.combine(media.state, messenger.store.privacy, messenger.store.account) { st, p, acc -> Triple(st, p, acc) }
+                .collect { (st, p, acc) ->
+                    if (acc == null) return@collect
+                    val track = st?.takeIf { it.isPlaying && p.nowPlaying != com.tshk.hlthhbbty.messenger.Visibility.NOBODY }
+                    messenger.shareNowPlaying(track?.title.orEmpty(), track?.artist.orEmpty(), track?.appName.orEmpty(), p.nowPlaying.name)
+                }
+        }
         // Виджет перекрашивается вместе с темой и акцентом.
         scope.launch {
             settings.settings.distinctUntilChanged { a, b -> a.themeMode == b.themeMode && a.accentIndex == b.accentIndex }
@@ -150,6 +180,7 @@ class AppContainer(private val context: Context) {
             HabitsWidget.refresh(context)
             checkAchievements()
         }
+        backupSoon()
         // Профиль в мессенджере — не чаще раза в 20 секунд.
         profilePush?.cancel()
         profilePush = scope.launch {

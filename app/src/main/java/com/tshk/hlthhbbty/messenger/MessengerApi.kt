@@ -16,7 +16,10 @@ class ApiException(val code: Int, val error: String, message: String) : Exceptio
 data class RemoteUser(val username: String, val displayName: String, val avatar: String, val presence: Presence? = null)
 
 /** Статус пользователя: ONLINE — в сети, DND — не беспокоить, AWAY — вне чата (автоматически). */
-data class Presence(val status: String, val lastSeen: Long)
+data class Presence(val status: String, val lastSeen: Long, val nowPlaying: Track? = null)
+
+/** Что сейчас играет у пользователя. */
+data class Track(val title: String, val artist: String, val app: String)
 
 data class RemoteProfile(
     val username: String,
@@ -97,6 +100,14 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
 
     suspend fun limits() = call("GET", "/me/limits")
 
+    // ---------- админ-панель (только для developer) ----------
+    suspend fun adminStats() = call("GET", "/admin/stats")
+    suspend fun adminLogs(n: Int = 200): List<String> {
+        val arr = call("GET", "/admin/logs?n=$n").optJSONArray("lines") ?: JSONArray()
+        return (0 until arr.length()).map { arr.getString(it) }
+    }
+    suspend fun adminWipe() = call("POST", "/admin/wipe", JSONObject().put("confirm", "СБРОСИТЬ ВСЁ"))
+
     /** Загрузка уже зашифрованного файла. */
     suspend fun uploadMedia(bytes: ByteArray): String = withContext(Dispatchers.IO) {
         val base = baseUrl().trimEnd('/')
@@ -150,6 +161,8 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
     }
 
     suspend fun setStatus(status: String) = call("PUT", "/me/status", JSONObject().put("status", status))
+    suspend fun setNowPlaying(title: String, artist: String, app: String, vis: String) =
+        call("PUT", "/me/nowplaying", JSONObject().put("title", title).put("artist", artist).put("app", app).put("vis", vis))
     suspend fun setPresence(active: Boolean) = call("PUT", "/me/presence", JSONObject().put("active", active))
     suspend fun presence(usernames: List<String>): Map<String, Presence> {
         if (usernames.isEmpty()) return emptyMap()
@@ -187,7 +200,10 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
 
     companion object {
         fun parsePresence(o: JSONObject?): Presence? =
-            o?.optString("status")?.takeIf { it.isNotBlank() }?.let { Presence(it, o.optLong("lastSeen")) }
+            o?.optString("status")?.takeIf { it.isNotBlank() }?.let {
+                val np = o.optJSONObject("nowPlaying")?.let { t -> Track(t.optString("title"), t.optString("artist"), t.optString("app")) }
+                Presence(it, o.optLong("lastSeen"), np?.takeIf { t -> t.title.isNotBlank() })
+            }
 
         fun parseMessage(o: JSONObject) = RemoteMessage(
             o.getLong("id"), o.getString("from"), o.getString("to"), o.getString("ciphertext"), o.getString("clientId"), o.getLong("createdAt"),

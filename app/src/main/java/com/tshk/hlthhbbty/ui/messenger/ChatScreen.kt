@@ -1,6 +1,7 @@
 package com.tshk.hlthhbbty.ui.messenger
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,7 +111,14 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(profile?.displayName ?: "@${vm.peer}", style = MaterialTheme.typography.titleMedium, color = p.textPrimary, maxLines = 1)
-                        Text(statusLabel(presence), style = MaterialTheme.typography.labelSmall, color = statusColor(presence?.status), maxLines = 1)
+                        val np = presence?.nowPlaying
+                        if (np != null) {
+                            Text("🎵 ${np.title}" + (if (np.artist.isNotBlank()) " — ${np.artist}" else ""),
+                                style = MaterialTheme.typography.labelSmall, color = p.accent, maxLines = 1,
+                                modifier = Modifier.basicMarquee())
+                        } else {
+                            Text(statusLabel(presence), style = MaterialTheme.typography.labelSmall, color = statusColor(presence?.status), maxLines = 1)
+                        }
                     }
                 }
                 GlassIconButton(Icons.Rounded.Lock, "Шифрование", { showSecurity = true }, tint = p.accent)

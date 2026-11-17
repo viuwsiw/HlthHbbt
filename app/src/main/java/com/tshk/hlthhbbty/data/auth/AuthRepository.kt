@@ -24,6 +24,7 @@ class AuthRepository(
     private val session: SessionStore,
     private val habits: HabitRepository,
     private val messenger: () -> MessengerRepository,
+    private val cloud: () -> com.tshk.hlthhbbty.cloud.CloudBackup,
 ) {
     val currentUserId: Flow<Long?> = session.currentUserId
 
@@ -43,6 +44,7 @@ class AuthRepository(
             }
             val local = userDao.findByUsername(login)
             val id = local?.id ?: userDao.insert(localUser(login, password, name)).also { habits.seedDefaults(it) }
+            cloud().rememberPassword(login, password)
             finishSignIn(id, login, token)
             AuthResult.Success(id)
         }
@@ -73,13 +75,15 @@ class AuthRepository(
                 }
             }
             if (local == null) {
-                // Первый вход на этом устройстве — заводим локальный профиль из данных сервера.
+                // Первый вход на этом устройстве: профиль из сервера, данные — из облачной копии.
                 val me = runCatching { m.api.meWith(token) }.getOrNull()
                 val name = me?.optString("displayName")?.takeIf { it.isNotBlank() } ?: login
                 val id = userDao.insert(localUser(login, password, name))
-                habits.seedDefaults(id)
+                val restored = runCatching { cloud().restore(id, login, token, password) }.getOrDefault(false)
+                if (!restored) habits.seedDefaults(id)
                 local = userDao.findById(id)
             }
+            cloud().rememberPassword(login, password)
             finishSignIn(local!!.id, login, token)
             AuthResult.Success(local.id)
         }
@@ -107,6 +111,8 @@ class AuthRepository(
             }
             val hashed = PasswordHasher.hash(new.toCharArray())
             userDao.update(user.copy(passwordHash = hashed.hash, passwordSalt = hashed.salt))
+            cloud().rememberPassword(user.username, new) // копия перешифруется новым ключом
+            cloud().backupNow(userId)
             AuthResult.Success(userId)
         }
 
@@ -126,6 +132,7 @@ class AuthRepository(
                 return@withContext AuthResult.Error(e.message ?: "Ошибка сервера")
             }
             userDao.update(user.copy(username = login))
+            cloud().rememberPassword(login, password)
             finishSignIn(user.id, login, token)
             AuthResult.Success(user.id)
         }

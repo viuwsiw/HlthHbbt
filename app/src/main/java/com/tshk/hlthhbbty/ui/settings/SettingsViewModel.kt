@@ -46,6 +46,32 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
     fun replayOnboarding() = viewModelScope.launch {
         c.auth.currentUserId.filterNotNull().first().let { c.onboarding.reset(it) }
     }
+    val cloudState = c.cloud.state
+    val cloudLastAt = c.cloud.lastAt
+    private val _cloudBusy = MutableStateFlow(false)
+    val cloudBusy: StateFlow<Boolean> = _cloudBusy.asStateFlow()
+
+    fun backupNow() = viewModelScope.launch {
+        _cloudBusy.value = true
+        val ok = c.cloud.backupNow(c.auth.currentUserId.filterNotNull().first())
+        _message.value = if (ok) "Копия сохранена" else "Не удалось сохранить копию"
+        _cloudBusy.value = false
+    }
+
+    /** Включить копию на сессии, где пароль ещё не вводился (перенесённый аккаунт). */
+    fun enableCloud(password: String) = viewModelScope.launch {
+        _cloudBusy.value = true
+        val acc = c.messenger.store.account.value
+        if (acc == null) { _message.value = "Сначала войдите в аккаунт"; _cloudBusy.value = false; return@launch }
+        val ok = runCatching { c.messenger.api.login(acc.username, password) }.isSuccess
+        if (ok) {
+            c.cloud.rememberPassword(acc.username, password)
+            c.cloud.backupNow(c.auth.currentUserId.filterNotNull().first())
+            _message.value = "Облачная копия включена"
+        } else _message.value = "Неверный пароль"
+        _cloudBusy.value = false
+    }
+
     fun setBugButton(on: Boolean) = update { it.copy(bugButton = on) }
     fun setAutoUpdate(on: Boolean) = update { it.copy(autoUpdate = on) }
     val updater = c.updater

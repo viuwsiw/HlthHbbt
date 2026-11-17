@@ -182,6 +182,7 @@ class MessengerRepository(
         val kind = if (media != null) "media" else "text"
         val localMedia = media?.toString()
         chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, now, kind = kind, media = localMedia))
+        throttle()
         val ct = crypto.encrypt(theirKey, payload, acc.username, peer)
         val (id, createdAt) = api.send(
             to = peer,
@@ -192,6 +193,18 @@ class MessengerRepository(
         )
         chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, createdAt, id, kind = kind, media = localMedia))
         store.setLastRead(peer, id)
+    }
+
+    private val sendTimes = ArrayDeque<Long>()
+    private val throttleLock = Mutex()
+
+    /** Сервер принимает не больше 2 сообщений/файлов за 5 секунд — третье ждёт своей очереди. */
+    private suspend fun throttle() = throttleLock.withLock {
+        while (sendTimes.size >= 2) {
+            val wait = sendTimes.first() + 5_100 - System.currentTimeMillis()
+            if (wait <= 0) sendTimes.removeFirst() else delay(wait)
+        }
+        sendTimes.addLast(System.currentTimeMillis())
     }
 
     // ---------- медиа (сквозное шифрование файлов) ----------
@@ -384,6 +397,20 @@ class MessengerRepository(
         }
     }
 
+    private var lastShared: String? = null
+    private var shareJob: Job? = null
+
+    /** Поделиться тем, что играет (пустой title — ничего не играет). С задержкой, чтобы не дёргать сервер на каждом треке. */
+    fun shareNowPlaying(title: String, artist: String, app: String, vis: String) {
+        val key = "$title|$artist|$app|$vis"
+        if (key == lastShared) return
+        shareJob?.cancel()
+        shareJob = scope.launch {
+            delay(1_500)
+            if (runCatching { api.setNowPlaying(title, artist, app, vis) }.isSuccess) lastShared = key
+        }
+    }
+
     suspend fun setMyStatus(status: String) {
         store.setMyStatus(status)
         runCatching { api.setStatus(status) }
@@ -400,9 +427,12 @@ class MessengerRepository(
 
     // ---------- профиль и конфиденциальность ----------
 
+    var onPrivacyChanged: (() -> Unit)? = null
+
     suspend fun savePrivacy(p: Privacy) {
         val acc = store.account.value ?: return
         store.savePrivacy(acc.username, p)
+        onPrivacyChanged?.invoke()
         pushProfile()
     }
 

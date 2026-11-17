@@ -58,6 +58,10 @@ func (s *Server) importAccount(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "bad_username", "Некорректный логин")
 		return
 	}
+	if reservedUsername(req.Username) {
+		fail(w, 409, "username_taken", "Логин уже занят на сервере")
+		return
+	}
 	hash, err1 := base64.StdEncoding.DecodeString(req.Hash)
 	salt, err2 := base64.StdEncoding.DecodeString(req.Salt)
 	if err1 != nil || err2 != nil || len(hash) < 16 || len(salt) < 8 || req.Iterations < 10_000 || req.Iterations > 1_000_000 {

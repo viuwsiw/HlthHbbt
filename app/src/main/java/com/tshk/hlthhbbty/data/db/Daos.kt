@@ -123,6 +123,9 @@ interface WalkDao {
     @Query("SELECT * FROM walks WHERE userId = :userId ORDER BY startedAt DESC LIMIT 50")
     fun observeWalks(userId: Long): Flow<List<WalkEntity>>
 
+    @Query("SELECT * FROM walks WHERE userId = :userId ORDER BY startedAt")
+    suspend fun allForUser(userId: Long): List<WalkEntity>
+
     @Query("SELECT * FROM walk_points WHERE walkId = :walkId ORDER BY idx")
     suspend fun points(walkId: Long): List<WalkPointEntity>
 

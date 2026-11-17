@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.first
@@ -113,6 +114,7 @@ private object Routes {
     const val CHAT = "chat/{peer}"
     const val USER = "user/{username}"
     const val PRIVACY = "privacy"
+    const val ADMIN = "admin"
     fun chat(peer: String) = "chat/$peer"
     fun user(username: String) = "user/$username"
     const val EDIT_PROFILE = "profile/edit"
@@ -195,6 +197,9 @@ private fun MainScaffold() {
             appContainer.focusTimer.state.value?.let { nav.navigate(Routes.focus(it.habitId)) { launchSingleTop = true } }
         }
     }
+
+    var homeTaps by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var lastHomeTap by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
 
     // Плеер в нижней панели — только пока что-то играет.
     val music: com.tshk.hlthhbbty.ui.integrations.SpotifyViewModel =
@@ -311,6 +316,7 @@ private fun MainScaffold() {
             composable(Routes.USER, arguments = listOf(navArgument("username") { type = NavType.StringType })) {
                 com.tshk.hlthhbbty.ui.messenger.UserProfileScreen(onBack = { nav.popBackStack() }, onMessage = { nav.navigate(Routes.chat(it)) })
             }
+            composable(Routes.ADMIN) { com.tshk.hlthhbbty.ui.admin.AdminScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.PRIVACY) {
                 com.tshk.hlthhbbty.ui.messenger.PrivacyScreen(onBack = { nav.popBackStack() }, onPreview = { nav.navigate(Routes.user(it)) })
             }
@@ -375,7 +381,19 @@ private fun MainScaffold() {
             GlassBottomBar(
                 items = navItems,
                 selectedIndex = tabIndex.coerceAtLeast(0),
-                onSelect = { nav.switchTab(tabs[it]) },
+                onSelect = { i ->
+                    // 10 быстрых нажатий на «Главную» под @developer — админ-панель.
+                    if (i == 0) {
+                        val now = System.currentTimeMillis()
+                        homeTaps = if (now - lastHomeTap < 700) homeTaps + 1 else 1
+                        lastHomeTap = now
+                        if (homeTaps >= 10) {
+                            homeTaps = 0
+                            if (appContainer.messenger.me == "developer") nav.navigate(Routes.ADMIN) { launchSingleTop = true }
+                        }
+                    }
+                    nav.switchTab(tabs[i])
+                },
                 player = if (np != null && np.isPlaying) {
                     { com.tshk.hlthhbbty.ui.integrations.BarPlayer(np, music::togglePlay, music::next) { nav.navigate(Routes.PLAYER) } }
                 } else null,

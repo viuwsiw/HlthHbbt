@@ -19,6 +19,15 @@ class BackupRepository(private val context: Context, private val db: AppDatabase
 
     suspend fun export(userId: Long, uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            val root = exportJson(userId)
+            context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(root.toString(2).toByteArray()) }
+                ?: error("Не удалось открыть файл")
+        }
+    }
+
+    /** Данные пользователя в JSON (для файла и облачной копии). */
+    suspend fun exportJson(userId: Long): JSONObject = withContext(Dispatchers.IO) {
+        run {
             val user = db.userDao().findById(userId) ?: error("Пользователь не найден")
             val habits = db.habitDao().allForUser(userId)
             val root = JSONObject()
@@ -54,8 +63,7 @@ class BackupRepository(private val context: Context, private val db: AppDatabase
                 .put("notes", JSONArray(db.noteDao().all(userId).map {
                     JSONObject().put("day", it.epochDay).put("mood", it.mood).put("note", it.note)
                 }))
-            context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(root.toString(2).toByteArray()) }
-                ?: error("Не удалось открыть файл")
+            root
         }
     }
 
@@ -64,7 +72,13 @@ class BackupRepository(private val context: Context, private val db: AppDatabase
         runCatching {
             val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
                 ?: error("Не удалось открыть файл")
-            val root = JSONObject(text)
+            importJson(userId, JSONObject(text))
+        }
+    }
+
+    /** Заменяет привычки, воду и заметки пользователя данными из JSON. Возвращает число привычек. */
+    suspend fun importJson(userId: Long, root: JSONObject): Int = withContext(Dispatchers.IO) {
+        run {
             require(root.optString("format") == "hlth-hbbty") { "Это не файл HLTH HBTy" }
             var imported = 0
             db.withTransaction {

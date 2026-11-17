@@ -81,6 +81,7 @@ fun PrivacyScreen(onBack: () -> Unit, onPreview: (String) -> Unit, vm: PrivacyVi
             VisRow("🏆 Достижения", privacy.achievements) { v -> vm.update { it.copy(achievements = v) } }
             VisRow("✅ Привычки и неделя", privacy.habits) { v -> vm.update { it.copy(habits = v) } }
             VisRow("💧 Вода", privacy.water) { v -> vm.update { it.copy(water = v) } }
+            VisRow("🎵 Что я слушаю", privacy.nowPlaying) { v -> vm.update { it.copy(nowPlaying = v) } }
         }
         VSpace(14.dp)
         GlassButton("Посмотреть мою страницу", { linked?.username?.let(onPreview) }, Modifier.fillMaxWidth(), style = GlassButtonStyle.Secondary)

@@ -175,6 +175,10 @@ fun EditProfileScreen(
                 leadingIcon = Icons.Rounded.Cake, keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Done, error = s.errors["age"],
             )
+            VSpace(12.dp)
+            GlassTextField(s.bio, vm::onBio, "О себе", singleLine = false, imeAction = ImeAction.Default)
+            Text("${s.bio.length} / 160 · видно на вашей странице в мессенджере", style = MaterialTheme.typography.labelSmall,
+                color = p.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
             VSpace(16.dp)
             Text("Пол", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
             VSpace(8.dp)

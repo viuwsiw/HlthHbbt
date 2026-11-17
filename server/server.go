@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -27,7 +28,11 @@ type Server struct {
 	maxAccountsDevice int
 	maxAccountsTotal  int
 	mediaTTLDays      int
+	logs              *RingLog
+	spam              *Limiter // антиспам: не больше 2 сообщений за 5 секунд
 }
+
+func (s *Server) logf(format string, args ...any) { log.Printf(format, args...) }
 
 // Лимиты контента.
 const (
@@ -60,6 +65,12 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /v1/me/password", s.auth(s.changePassword))
 	mux.HandleFunc("GET /v1/me/limits", s.auth(s.limits))
 	mux.HandleFunc("POST /v1/media", s.auth(s.uploadMedia))
+	mux.HandleFunc("PUT /v1/me/backup", s.auth(s.putBackup))
+	mux.HandleFunc("GET /v1/me/backup", s.auth(s.getBackup))
+	mux.HandleFunc("PUT /v1/me/nowplaying", s.auth(s.putNowPlaying))
+	mux.HandleFunc("GET /v1/admin/stats", s.admin(s.adminStats))
+	mux.HandleFunc("GET /v1/admin/logs", s.admin(s.adminLogs))
+	mux.HandleFunc("POST /v1/admin/wipe", s.admin(s.adminWipe))
 	mux.HandleFunc("GET /v1/media/{id}", s.auth(s.downloadMedia))
 	mux.HandleFunc("POST /v1/auth/logout", s.auth(s.logout))
 	mux.HandleFunc("GET /v1/me", s.auth(s.me))
@@ -133,6 +144,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
 	if !usernameRe.MatchString(req.Username) {
 		fail(w, 400, "bad_username", "Логин: 3–24 символа, латиница, цифры, _ и .")
+		return
+	}
+	if reservedUsername(req.Username) {
+		fail(w, 409, "username_taken", "Логин уже занят")
 		return
 	}
 	if utf8.RuneCountInString(req.Password) < 6 {
@@ -375,7 +390,7 @@ func (s *Server) loadProfile(owner, viewer int64) (map[string]any, error) {
 	}
 	st, seen := s.presenceOf(owner)
 	res := map[string]any{
-		"status": st, "lastSeen": seen,
+		"status": st, "lastSeen": seen, "nowPlaying": s.nowPlayingFor(owner, viewer),
 		"userId": owner, "username": username, "displayName": name, "avatar": avatar, "bio": bio,
 		"createdAt": created, "fields": visible, "hasKey": key != "",
 		"isContact": !self && s.isContact(viewer, owner), "isSelf": self,
@@ -520,6 +535,10 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) 
 	if !ok {
 		return
 	}
+	if !s.spam.Allow("msg:" + strconv.FormatInt(u.ID, 10)) {
+		fail(w, 429, "spam", "Слишком часто: не больше 2 сообщений или файлов за 5 секунд")
+		return
+	}
 	var sent int
 	_ = s.db.QueryRow(`SELECT msg_count FROM users WHERE id=?`, u.ID).Scan(&sent)
 	if sent >= MaxMessagesPerUser {
@@ -580,7 +599,7 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request, u ctxUser)
 
 func withLimits(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/media" {
+		if r.URL.Path != "/v1/media" && r.URL.Path != "/v1/me/backup" {
 			r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -691,7 +710,7 @@ func (s *Server) getPresence(w http.ResponseWriter, r *http.Request, u ctxUser) 
 			continue
 		}
 		st, seen := s.presenceOf(id)
-		res[name] = map[string]any{"status": st, "lastSeen": seen}
+		res[name] = map[string]any{"status": st, "lastSeen": seen, "nowPlaying": s.nowPlayingFor(id, u.ID)}
 	}
 	writeJSON(w, 200, map[string]any{"presence": res})
 }
@@ -699,7 +718,6 @@ func (s *Server) getPresence(w http.ResponseWriter, r *http.Request, u ctxUser) 
 // broadcastPresence — разослать новый статус собеседникам и тем, у кого пользователь в контактах.
 func (s *Server) broadcastPresence(id int64, username string) {
 	st, seen := s.presenceOf(id)
-	ev := map[string]any{"type": "presence", "username": username, "status": st, "lastSeen": seen}
 	rows, err := s.db.Query(`
 		SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END FROM messages WHERE sender_id=? OR recipient_id=?
 		UNION SELECT owner_id FROM contacts WHERE contact_id=?`, id, id, id, id)
@@ -714,6 +732,7 @@ func (s *Server) broadcastPresence(id int64, username string) {
 	}
 	rows.Close()
 	for _, p := range peers {
-		s.hub.send(p, ev)
+		// Событие у каждого своё: «сейчас играет» видно только тем, кому разрешено.
+		s.hub.send(p, map[string]any{"type": "presence", "username": username, "status": st, "lastSeen": seen, "nowPlaying": s.nowPlayingFor(id, p)})
 	}
 }

@@ -27,6 +27,8 @@ func main() {
 		log.Fatal(err)
 	}
 	db.SetMaxOpenConns(1) // SQLite: один писатель — без гонок
+	ring := newRingLog(500, os.Stderr)
+	log.SetOutput(ring)
 	if err := migrate(db); err != nil {
 		log.Fatal(err)
 	}
@@ -36,12 +38,19 @@ func main() {
 		maxAccountsDevice: envInt("MAX_ACCOUNTS_PER_DEVICE", 15),
 		maxAccountsTotal:  envInt("MAX_ACCOUNTS_TOTAL", 0), // 0 — без общего предела
 		mediaTTLDays:      envInt("MEDIA_TTL_DAYS", 30),
+		logs:              ring,
+		spam:              newLimiter(2, 5*time.Second),
+	}
+	// CLI: hlth-server create-admin — создать аккаунт developer со случайным паролем.
+	if len(os.Args) > 1 && os.Args[1] == "create-admin" {
+		createAdmin(s)
+		return
 	}
 	if err := os.MkdirAll(s.mediaDir, 0o700); err != nil {
 		log.Fatal(err)
 	}
 	go s.mediaJanitor()
-	srv := &http.Server{Addr: addr, Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: requestLog(s.logf, s.routes()), ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
 		log.Printf("listening on %s", addr)

@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 32
-        versionName = "1.1-beta.4"
+        versionCode = 33
+        versionName = "1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "MESSENGER_URL", "\"${project.findProperty("messenger.url") ?: ""}\"")

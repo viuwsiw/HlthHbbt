@@ -18,6 +18,8 @@ data class Privacy(
     val achievements: Visibility = Visibility.ALL,
     val habits: Visibility = Visibility.CONTACTS,
     val water: Visibility = Visibility.NOBODY,
+    /** Что сейчас играет — видно собеседникам в диалоге. */
+    val nowPlaying: Visibility = Visibility.ALL,
 )
 
 /** Привязка локального аккаунта к серверу мессенджера. */
@@ -64,7 +66,7 @@ class MessengerStore(context: Context) {
         prefs.edit().putString("privacy_$username", JSONObject()
             .put("discoverable", p.discoverable).put("bio", p.bio)
             .put("streak", p.streak.name).put("achievements", p.achievements.name)
-            .put("habits", p.habits.name).put("water", p.water.name).toString()).apply()
+            .put("habits", p.habits.name).put("water", p.water.name).put("nowPlaying", p.nowPlaying.name).toString()).apply()
         _privacy.value = p
     }
 
@@ -75,6 +77,7 @@ class MessengerStore(context: Context) {
         achievements = Visibility.valueOf(j.optString("achievements", "ALL")),
         habits = Visibility.valueOf(j.optString("habits", "CONTACTS")),
         water = Visibility.valueOf(j.optString("water", "NOBODY")),
+        nowPlaying = Visibility.valueOf(j.optString("nowPlaying", "ALL")),
     )
 
     var lastMessageId: Long

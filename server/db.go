@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS media_access (
 	user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	PRIMARY KEY (media_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS backups (
+	user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	data       BLOB NOT NULL,
+	updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS registrations (
 	device_id  TEXT NOT NULL,
 	ip         TEXT NOT NULL,
