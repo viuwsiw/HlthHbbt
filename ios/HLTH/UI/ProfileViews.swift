@@ -43,6 +43,8 @@ struct ProfileView: View {
                 Divider().opacity(0.3)
                 link("Настройки", "gearshape") { SettingsView() }
                 Divider().opacity(0.3)
+                link("VPN", "lock.shield") { VPNView() }
+                Divider().opacity(0.3)
                 link("Сменить пароль", "key") { ChangePasswordView() }
             }
             .glass()

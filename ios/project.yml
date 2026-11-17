@@ -7,8 +7,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.2"
-    CURRENT_PROJECT_VERSION: "36"
+    MARKETING_VERSION: "1.2.1"
+    CURRENT_PROJECT_VERSION: "37"
     DEVELOPMENT_TEAM: ""
 targets:
   HLTH:
@@ -17,6 +17,7 @@ targets:
     sources: [HLTH, Shared]
     dependencies:
       - target: HLTHWidgets
+      - target: HLTHTunnel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tshk.hlthhbbty
@@ -35,6 +36,24 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.tshk.hlthhbbty.widgets
         PRODUCT_NAME: HLTHWidgets
         INFOPLIST_FILE: HLTHWidgets/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+        ENABLE_PREVIEWS: NO
+  HLTHTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - HLTHTunnel
+      - path: Shared/VlessConfig.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tshk.hlthhbbty.tunnel
+        PRODUCT_NAME: HLTHTunnel
+        INFOPLIST_FILE: HLTHTunnel/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HLTHTunnel/HLTHTunnel.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: HLTHTunnel/Bridging.h
+        LIBRARY_SEARCH_PATHS: $(PROJECT_DIR)/Vendor
+        OTHER_LDFLAGS: -lhev-socks5-tunnel
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
         ENABLE_PREVIEWS: NO

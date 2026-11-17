@@ -28,6 +28,20 @@ jobs:
           sudo xcode-select -s "$X"
           xcodebuild -version
 
+      - name: Build hev-socks5-tunnel (VPN TCP/IP stack)
+        run: |
+          git clone -q --recursive --depth 1 --branch 2.9.3 https://github.com/heiher/hev-socks5-tunnel.git /tmp/hev
+          cd /tmp/hev
+          make PP="xcrun --sdk iphoneos --toolchain iphoneos clang" \
+               CC="xcrun --sdk iphoneos --toolchain iphoneos clang" \
+               CFLAGS="-arch arm64 -miphoneos-version-min=15.0" \
+               LFLAGS="-arch arm64 -miphoneos-version-min=15.0 -Wl,-Bsymbolic-functions" static
+          mkdir -p "$GITHUB_WORKSPACE/ios/Vendor"
+          libtool -static -o "$GITHUB_WORKSPACE/ios/Vendor/libhev-socks5-tunnel.a" \
+            bin/libhev-socks5-tunnel.a third-part/lwip/bin/liblwip.a \
+            third-part/yaml/bin/libyaml.a third-part/hev-task-system/bin/libhev-task-system.a
+          ls -la "$GITHUB_WORKSPACE/ios/Vendor"
+
       - name: Generate project
         run: |
           brew install xcodegen
@@ -57,7 +71,14 @@ jobs:
         run: |
           cd ios
           APP=build/Build/Products/Release-iphoneos/HLTH.app
-          for EXT in "$APP"/PlugIns/*.appex; do [ -d "$EXT" ] && codesign --force --sign - "$EXT"; done
+          for EXT in "$APP"/PlugIns/*.appex; do
+            [ -d "$EXT" ] || continue
+            if [ "$(basename "$EXT")" = "HLTHTunnel.appex" ]; then
+              codesign --force --sign - --entitlements HLTHTunnel/HLTHTunnel.entitlements "$EXT"
+            else
+              codesign --force --sign - "$EXT"
+            fi
+          done
           codesign --force --sign - --entitlements HLTH/HLTH.entitlements "$APP" || true
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           NAME="HLTH-HBTy-${VERSION}-ios.ipa"
