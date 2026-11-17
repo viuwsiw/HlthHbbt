@@ -6,7 +6,7 @@ data class ChangelogEntry(val version: String, val title: String, val items: Lis
 object Changelog {
     val entries = listOf(
         ChangelogEntry(
-            "1.1 beta 1", "Мессенджер",
+            "1.1 beta 2", "Мессенджер",
             listOf(
                 "Новая вкладка «Чаты»: переписка с другими пользователями HLTH HBTy",
                 "Сквозное шифрование: сообщения шифруются на телефоне, сервер видит только шифротекст; код безопасности для проверки",
