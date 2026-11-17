@@ -1,5 +1,6 @@
 import SwiftUI
 import NetworkExtension
+import CoreImage.CIFilterBuiltins
 
 /// VPN через системный API Apple (NetworkExtension): профиль появляется в Настройки → VPN.
 @MainActor
@@ -148,27 +149,11 @@ struct VPNView: View {
     var body: some View {
         let on = vpn.status == .connected || vpn.status == .connecting || vpn.status == .reasserting
         Screen(title: "VPN", large: false) {
-            VStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(on ? AnyShapeStyle(p.gradient) : AnyShapeStyle(Color.gray.opacity(0.2))).frame(width: 130, height: 130)
-                    Image(systemName: on ? "lock.shield.fill" : "shield.slash").font(.system(size: 50)).foregroundStyle(on ? p.onAccent : p.text2)
-                }
-                .glass(65)
-                .animation(.spring(duration: 0.4), value: on)
-                Text(vpn.statusText).font(.title3.bold()).foregroundStyle(p.text)
-                if let c = VlessConfig(vpn.key) {
-                    Text("\(c.name) · \(c.host)").font(.caption).foregroundStyle(p.text2)
-                }
-                if on {
-                    GlassButton(title: "Отключить", systemImage: "stop.fill", role: .destructive) { vpn.disconnect() }
-                } else {
-                    GlassButton(title: "Подключить", systemImage: "bolt.fill", prominent: true) { Task { await vpn.connect() } }
-                        .disabled(vpn.key.isEmpty)
-                }
+            if vpn.providerBundleId != nil {
+                builtIn(on)
+            } else {
+                externalApps
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-
             if let e = vpn.error { Text(e).font(.footnote).foregroundStyle(p.danger).glassCard() }
 
             SectionTitle("Ключ")
@@ -201,4 +186,112 @@ struct VPNView: View {
         }
         .task { await vpn.load() }
     }
+
+    private func builtIn(_ on: Bool) -> some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(on ? AnyShapeStyle(p.gradient) : AnyShapeStyle(Color.gray.opacity(0.2))).frame(width: 130, height: 130)
+                Image(systemName: on ? "lock.shield.fill" : "shield.slash").font(.system(size: 50)).foregroundStyle(on ? p.onAccent : p.text2)
+            }
+            .glass(65)
+            .animation(.spring(duration: 0.4), value: on)
+            Text(vpn.statusText).font(.title3.bold()).foregroundStyle(p.text)
+            if let c = VlessConfig(vpn.key) { Text("\(c.name) · \(c.host)").font(.caption).foregroundStyle(p.text2) }
+            if on {
+                GlassButton(title: "Отключить", systemImage: "stop.fill", role: .destructive) { vpn.disconnect() }
+            } else {
+                GlassButton(title: "Подключить", systemImage: "bolt.fill", prominent: true) { Task { await vpn.connect() } }
+                    .disabled(vpn.key.isEmpty)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    /// Без встроенного туннеля: ключ открывается в VPN-клиенте из App Store (у них есть право Apple на VPN).
+    private var externalApps: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Подключение в один шаг").font(.headline).foregroundStyle(p.text)
+            Text("Нажмите на приложение — ключ вашего сервера откроется в нём (если не установлено — откроется App Store). VPN появится в Настройки → VPN.")
+                .font(.caption).foregroundStyle(p.text2)
+            ForEach(VPNClient.all) { app in
+                Button { open(app) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: app.icon).font(.title3).foregroundStyle(p.onAccent)
+                            .frame(width: 42, height: 42).background(RoundedRectangle(cornerRadius: 12).fill(p.gradient))
+                        VStack(alignment: .leading) {
+                            Text(app.name).font(.headline).foregroundStyle(p.text)
+                            Text(app.note).font(.caption2).foregroundStyle(p.text2)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.forward.app").foregroundStyle(p.accent)
+                    }
+                    .padding(10).glass(18, interactive: true)
+                }
+                .buttonStyle(.plain)
+                .disabled(vpn.key.isEmpty)
+            }
+            if !vpn.key.isEmpty, let qr = qrImage(vpn.key) {
+                HStack {
+                    Spacer()
+                    Image(uiImage: qr).interpolation(.none).resizable().frame(width: 180, height: 180)
+                        .padding(10).background(RoundedRectangle(cornerRadius: 16).fill(.white))
+                    Spacer()
+                }
+                Text("QR-код можно отсканировать в любом VPN-клиенте с поддержкой VLESS — на другом телефоне или компьютере.")
+                    .font(.caption2).foregroundStyle(p.text2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+            }
+            GlassButton(title: "Скопировать ключ", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = vpn.key
+                AppModel.shared.show("Ключ скопирован")
+            }
+            .disabled(vpn.key.isEmpty)
+        }
+        .glassCard()
+        .task { if vpn.key.isEmpty { await vpn.fetchKeyFromServer() } }
+    }
+
+    private func open(_ app: VPNClient) {
+        UIPasteboard.general.string = vpn.key   // большинство клиентов подхватывают ключ из буфера
+        let link = app.importLink(vpn.key)
+        UIApplication.shared.open(link) { ok in
+            if !ok { UIApplication.shared.open(app.appStore) }
+        }
+    }
+
+    private func qrImage(_ s: String) -> UIImage? {
+        let f = CIFilter.qrCodeGenerator()
+        f.message = Data(s.utf8)
+        f.correctionLevel = "M"
+        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
+              let cg = CIContext().createCGImage(out, from: out.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+}
+
+struct VPNClient: Identifiable {
+    let id: String
+    let name: String
+    let note: String
+    let icon: String
+    let scheme: String
+    let appStore: URL
+
+    func importLink(_ key: String) -> URL {
+        let enc = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
+        switch id {
+        case "streisand": return URL(string: "streisand://import/\(key)") ?? URL(string: "streisand://")!
+        case "hiddify": return URL(string: "hiddify://import/\(enc)") ?? URL(string: "hiddify://")!
+        default: return URL(string: "\(scheme)://")!
+        }
+    }
+
+    static let all: [VPNClient] = [
+        VPNClient(id: "streisand", name: "Streisand", note: "Бесплатно · ключ импортируется сам", icon: "bolt.shield.fill",
+                  scheme: "streisand", appStore: URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term=Streisand")!),
+        VPNClient(id: "hiddify", name: "Hiddify", note: "Бесплатно · открытый код", icon: "shield.lefthalf.filled",
+                  scheme: "hiddify", appStore: URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term=Hiddify")!),
+        VPNClient(id: "v2box", name: "V2Box", note: "Ключ уже скопирован — нажмите «+» → из буфера", icon: "cube.fill",
+                  scheme: "v2box", appStore: URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term=V2Box")!),
+    ]
 }
