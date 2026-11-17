@@ -1,7 +1,7 @@
 {
-  "versionCode": 27,
-  "versionName": "1.0.2.4",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/fd3395e9d84e07cca767cc21ef2282caa874afaa/dist/HLTH-HBTy-27.apk",
-  "size": 3678313,
-  "changelog": "• Свайпы между разделами — с любого места экрана и от короткого движения\n• Страница едет за пальцем, разделы выезжают сбоку\n• Плавное каскадное появление карточек\n• Анимация воды"
+  "versionCode": 28,
+  "versionName": "1.0.3",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/afa3483b334eeff56602a7d8a11317bab76fb084/dist/HLTH-HBTy-28.apk",
+  "size": 3696796,
+  "changelog": "test"
 }
