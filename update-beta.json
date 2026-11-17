@@ -1,7 +1,7 @@
 {
-  "versionCode": 30,
-  "versionName": "1.1-beta.2",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/f06b38a8664d322f86a82f7fcd2e152f6ccd2c79/dist/HLTH-HBTy-30.apk",
+  "versionCode": 31,
+  "versionName": "1.1-beta.3",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/a180471a42ae2a513d16f623fc8588bbd092acfe/dist/HLTH-HBTy-31.apk",
   "size": 4405700,
-  "changelog": "Бета 1.1 (2): адрес сервера мессенджера встроен — ничего вводить не нужно"
+  "changelog": "Бета 1.1 (3)\n• Вкладка «Мессенджер»\n• Статусы: «В сети», «Не беспокоить», автоматический «Вне чата»"
 }
