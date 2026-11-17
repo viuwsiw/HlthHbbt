@@ -69,11 +69,64 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
 
     suspend fun health() = call("GET", "/health", auth = false)
 
-    suspend fun register(username: String, password: String, displayName: String): String =
-        call("POST", "/auth/register", JSONObject().put("username", username).put("password", password).put("displayName", displayName), auth = false).getString("token")
+    suspend fun register(username: String, password: String, displayName: String, deviceId: String): String =
+        call("POST", "/auth/register", JSONObject().put("username", username).put("password", password)
+            .put("displayName", displayName).put("deviceId", deviceId), auth = false).getString("token")
 
     suspend fun login(username: String, password: String): String =
         call("POST", "/auth/login", JSONObject().put("username", username).put("password", password), auth = false).getString("token")
+
+    /** Перенос аккаунта, созданного на устройстве до появления сервера (передаётся хеш, не пароль). */
+    suspend fun importAccount(username: String, displayName: String, hash: String, salt: String, iterations: Int, deviceId: String): String =
+        call("POST", "/auth/import", JSONObject().put("username", username).put("displayName", displayName)
+            .put("hash", hash).put("salt", salt).put("iterations", iterations).put("deviceId", deviceId), auth = false).getString("token")
+
+    /** Логин с явным токеном (до того, как он сохранён). */
+    suspend fun meWith(token: String): JSONObject = withContext(Dispatchers.IO) {
+        val base = baseUrl().trimEnd('/')
+        val req = Request.Builder().url("$base/v1/me").header("Authorization", "Bearer $token").get().build()
+        try {
+            http.newCall(req).execute().use { r -> JSONObject(r.body?.string().orEmpty()) }
+        } catch (e: java.io.IOException) {
+            throw ApiException(0, "network", "Нет связи с сервером")
+        }
+    }
+
+    suspend fun changePassword(current: String, new: String) =
+        call("PUT", "/me/password", JSONObject().put("current", current).put("new", new))
+
+    suspend fun limits() = call("GET", "/me/limits")
+
+    /** Загрузка уже зашифрованного файла. */
+    suspend fun uploadMedia(bytes: ByteArray): String = withContext(Dispatchers.IO) {
+        val base = baseUrl().trimEnd('/')
+        val req = Request.Builder().url("$base/v1/media")
+            .header("Authorization", "Bearer ${token()}")
+            .post(bytes.toRequestBody("application/octet-stream".toMediaType()))
+            .build()
+        val longClient = http.newBuilder().writeTimeout(5, TimeUnit.MINUTES).readTimeout(2, TimeUnit.MINUTES).build()
+        val resp = try { longClient.newCall(req).execute() } catch (e: java.io.IOException) {
+            throw ApiException(0, "network", "Не удалось загрузить файл: нет связи")
+        }
+        resp.use { r ->
+            val obj = runCatching { JSONObject(r.body?.string().orEmpty()) }.getOrElse { JSONObject() }
+            if (!r.isSuccessful) throw ApiException(r.code, obj.optString("error"), obj.optString("message").ifBlank { "Ошибка загрузки (${r.code})" })
+            obj.getString("id")
+        }
+    }
+
+    suspend fun downloadMedia(id: String): ByteArray = withContext(Dispatchers.IO) {
+        val base = baseUrl().trimEnd('/')
+        val req = Request.Builder().url("$base/v1/media/$id").header("Authorization", "Bearer ${token()}").get().build()
+        val longClient = http.newBuilder().readTimeout(5, TimeUnit.MINUTES).build()
+        val resp = try { longClient.newCall(req).execute() } catch (e: java.io.IOException) {
+            throw ApiException(0, "network", "Нет связи с сервером")
+        }
+        resp.use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, "download", if (r.code == 404) "Файл удалён с сервера (хранится 30 дней)" else "Ошибка загрузки (${r.code})")
+            r.body!!.bytes()
+        }
+    }
 
     suspend fun logout() = runCatching { call("POST", "/auth/logout") }
 
@@ -108,8 +161,9 @@ class MessengerApi(private val baseUrl: () -> String, private val token: () -> S
     suspend fun addContact(username: String) = call("PUT", "/contacts/$username")
     suspend fun removeContact(username: String) = call("DELETE", "/contacts/$username")
 
-    suspend fun send(to: String, ctRecipient: String, ctSender: String, clientId: String): Pair<Long, Long> {
-        val j = call("POST", "/messages", JSONObject().put("to", to).put("ctRecipient", ctRecipient).put("ctSender", ctSender).put("clientId", clientId))
+    suspend fun send(to: String, ctRecipient: String, ctSender: String, clientId: String, mediaIds: List<String> = emptyList()): Pair<Long, Long> {
+        val j = call("POST", "/messages", JSONObject().put("to", to).put("ctRecipient", ctRecipient).put("ctSender", ctSender)
+            .put("clientId", clientId).put("mediaIds", JSONArray(mediaIds)))
         return j.getLong("id") to j.getLong("createdAt")
     }
 

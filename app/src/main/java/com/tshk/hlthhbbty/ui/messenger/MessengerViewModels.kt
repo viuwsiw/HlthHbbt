@@ -81,6 +81,21 @@ class ChatsViewModel(private val c: AppContainer) : ViewModel() {
 
     fun setServer(url: String) = m.store.setServerUrl(url)
 
+    /** Логин текущего пользователя занят на сервере — нужен новый. */
+    val conflict: StateFlow<Boolean> = localUsername.map { it != null && m.store.hasConflict(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun claimNewUsername(newLogin: String, password: String) = viewModelScope.launch {
+        val id = c.auth.currentUserId.filterNotNull().first()
+        _busy.value = true
+        _error.value = null
+        when (val r = c.auth.claimNewUsername(id, newLogin, password)) {
+            is com.tshk.hlthhbbty.data.auth.AuthResult.Error -> _error.value = r.message
+            is com.tshk.hlthhbbty.data.auth.AuthResult.Success -> Unit
+        }
+        _busy.value = false
+    }
+
     fun link(password: String) = viewModelScope.launch {
         val id = c.auth.currentUserId.filterNotNull().first()
         val user = c.users.observe(id).filterNotNull().first()
@@ -118,7 +133,7 @@ class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : Vie
 
     init {
         m.openChat = peer
-        viewModelScope.launch {
+        if (peer != m.me) viewModelScope.launch {
             _profile.value = runCatching { m.profile(peer) }.getOrNull()
             _safety.value = runCatching { m.safetyCode(peer) }.getOrNull()
         }
@@ -127,10 +142,24 @@ class ChatViewModel(private val c: AppContainer, handle: SavedStateHandle) : Vie
         }
     }
 
+    val isSelf get() = peer == m.me
+
+    private val _uploading = MutableStateFlow(false)
+    val uploading: StateFlow<Boolean> = _uploading.asStateFlow()
+
     fun send(text: String) = viewModelScope.launch {
         _error.value = null
         try { m.send(peer, text) } catch (e: ApiException) { _error.value = e.message }
     }
+
+    fun sendMedia(uri: android.net.Uri, caption: String) = viewModelScope.launch {
+        _error.value = null
+        _uploading.value = true
+        try { m.sendMedia(peer, uri, caption) } catch (e: ApiException) { _error.value = e.message } catch (e: Exception) { _error.value = "Не удалось отправить файл" }
+        _uploading.value = false
+    }
+
+    suspend fun mediaFile(json: String): java.io.File? = runCatching { m.mediaFile(org.json.JSONObject(json)) }.getOrNull()
 
     fun clearError() { _error.value = null }
 

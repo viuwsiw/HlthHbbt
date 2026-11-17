@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         FreezeEntity::class, DayNoteEntity::class, WalkEntity::class, WalkPointEntity::class,
         ChatMessageEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -73,9 +73,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN media TEXT")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "hlth_hbbty.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

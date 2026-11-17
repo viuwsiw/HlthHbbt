@@ -27,7 +27,15 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class HlthApp : Application() {
+class HlthApp : Application(), coil.ImageLoaderFactory {
+    override fun newImageLoader(): coil.ImageLoader = coil.ImageLoader.Builder(this)
+        .components {
+            if (android.os.Build.VERSION.SDK_INT >= 28) add(coil.decode.ImageDecoderDecoder.Factory())
+            else add(coil.decode.GifDecoder.Factory())
+        }
+        .crossfade(true)
+        .build()
+
     lateinit var container: AppContainer
         private set
 
@@ -50,7 +58,7 @@ class AppContainer(private val context: Context) {
     val water = WaterRepository(db.waterDao())
     val notes = NoteRepository(db.noteDao())
     val users = UserRepository(context, db.userDao())
-    val auth = AuthRepository(db.userDao(), SessionStore(context), habits)
+    val auth: AuthRepository = AuthRepository(db.userDao(), SessionStore(context), habits) { messenger }
     val history = HistoryRepository(users, habits, water, notes)
     val backup = BackupRepository(context, db)
     val health = HealthRepository(context, habits)
@@ -63,7 +71,7 @@ class AppContainer(private val context: Context) {
     val walkOpenRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** Экран, который просит открыть виджет: focus / walk / habits. */
     val widgetRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-    val messenger = com.tshk.hlthhbbty.messenger.MessengerRepository(
+    val messenger: com.tshk.hlthhbbty.messenger.MessengerRepository = com.tshk.hlthhbbty.messenger.MessengerRepository(
         context, scope, db.chatDao(),
         localUser = { auth.currentUserId.first()?.let { db.userDao().findById(it) } },
         history = { history.once(it) },
@@ -76,9 +84,9 @@ class AppContainer(private val context: Context) {
     private var profilePush: kotlinx.coroutines.Job? = null
 
     fun start() {
-        // Мессенджер: подключение при входе/регистрации, запуск, уведомления, фоновая синхронизация.
-        auth.onAuthenticated = { u, p, n -> messenger.linkQuietly(u, p, n) }
+        // Мессенджер и аккаунты: перенос локальных аккаунтов на сервер, запуск, уведомления, фоновая синхронизация.
         messenger.start()
+        scope.launch { runCatching { auth.migrateLocalAccounts(auth.currentUserId.first()) } }
         com.tshk.hlthhbbty.messenger.MessengerSyncWorker.schedule(context)
         scope.launch {
             messenger.incoming.collect { ev -> if (ev != null) Notifications.showChat(context, ev.peer, ev.text) }

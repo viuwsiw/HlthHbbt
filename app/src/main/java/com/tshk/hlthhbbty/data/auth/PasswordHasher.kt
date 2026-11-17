@@ -8,7 +8,7 @@ import javax.crypto.spec.PBEKeySpec
 
 /** PBKDF2-HMAC-SHA256 с уникальной солью для каждого пользователя. */
 object PasswordHasher {
-    private const val ITERATIONS = 120_000
+    const val ITERATIONS = 120_000
     private const val KEY_LENGTH_BITS = 256
     private const val SALT_BYTES = 16
 

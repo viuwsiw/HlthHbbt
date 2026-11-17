@@ -22,6 +22,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id")
     suspend fun findById(id: Long): UserEntity?
 
+    @Query("SELECT * FROM users")
+    suspend fun all(): List<UserEntity>
+
     @Query("SELECT * FROM users WHERE id = :id")
     fun observe(id: Long): Flow<UserEntity?>
 

@@ -143,7 +143,7 @@ fun AuthScreen(vm: AuthViewModel = viewModel(factory = AppViewModelProvider.Fact
             }
             VSpace(16.dp)
             Text(
-                "Данные хранятся только на этом устройстве. Пароль хранится в виде защищённого хеша.",
+                "Аккаунт хранится на сервере HLTH HBTy — войти можно с любого телефона. Пароль хранится в виде защищённого хеша, сообщения — со сквозным шифрованием.",
                 style = MaterialTheme.typography.labelMedium,
                 color = p.textSecondary,
                 textAlign = TextAlign.Center,

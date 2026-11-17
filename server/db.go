@@ -35,7 +35,41 @@ func migrate(db *sql.DB) error {
 	if err := ensureColumn(db, "users", "status", "TEXT NOT NULL DEFAULT 'ONLINE'"); err != nil {
 		return err
 	}
-	return ensureColumn(db, "users", "last_active", "INTEGER NOT NULL DEFAULT 0")
+	if err := ensureColumn(db, "users", "last_active", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Лимиты: число отправленных сообщений и суточная квота медиа.
+	for _, c := range [][2]string{
+		{"msg_count", "INTEGER NOT NULL DEFAULT 0"},
+		{"quota_start", "INTEGER NOT NULL DEFAULT 0"},
+		{"quota_used", "INTEGER NOT NULL DEFAULT 0"},
+		{"device_id", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if err := ensureColumn(db, "users", c[0], c[1]); err != nil {
+			return err
+		}
+	}
+	_, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS media (
+	id         TEXT PRIMARY KEY,
+	owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	size       INTEGER NOT NULL,
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
+CREATE TABLE IF NOT EXISTS media_access (
+	media_id TEXT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+	user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	PRIMARY KEY (media_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS registrations (
+	device_id  TEXT NOT NULL,
+	ip         TEXT NOT NULL,
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reg_device ON registrations(device_id);
+`)
+	return err
 }
 
 func migrateBase(db *sql.DB) error {

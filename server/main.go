@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,7 +30,17 @@ func main() {
 	if err := migrate(db); err != nil {
 		log.Fatal(err)
 	}
-	s := &Server{db: db, hub: newHub(), limiter: newLimiter(20, time.Minute)}
+	s := &Server{
+		db: db, hub: newHub(), limiter: newLimiter(20, time.Minute),
+		mediaDir:          env("MEDIA_DIR", dirOf(dbPath)+"/media"),
+		maxAccountsDevice: envInt("MAX_ACCOUNTS_PER_DEVICE", 15),
+		maxAccountsTotal:  envInt("MAX_ACCOUNTS_TOTAL", 0), // 0 — без общего предела
+		mediaTTLDays:      envInt("MEDIA_TTL_DAYS", 30),
+	}
+	if err := os.MkdirAll(s.mediaDir, 0o700); err != nil {
+		log.Fatal(err)
+	}
+	go s.mediaJanitor()
 	srv := &http.Server{Addr: addr, Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
@@ -48,6 +59,13 @@ func main() {
 
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
+
+func envInt(k string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(k)); err == nil {
 		return v
 	}
 	return def

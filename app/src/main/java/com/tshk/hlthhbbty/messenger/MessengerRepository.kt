@@ -28,6 +28,10 @@ import java.util.UUID
 
 enum class LinkState { NOT_LINKED, CONNECTING, ONLINE, OFFLINE }
 
+/** Лимиты (совпадают с сервером). */
+const val MAX_CHARS = 5000
+const val MAX_MEDIA_BYTES = 30L * 1024 * 1024
+
 /** Новое входящее сообщение — для уведомления. */
 data class IncomingEvent(val peer: String, val text: String)
 
@@ -36,7 +40,7 @@ data class IncomingEvent(val peer: String, val text: String)
  * Сервер видит только шифротекст и метаданные (кто, кому, когда).
  */
 class MessengerRepository(
-    context: Context,
+    private val context: Context,
     private val scope: CoroutineScope,
     private val chatDao: ChatDao,
     private val localUser: suspend () -> UserEntity?,
@@ -91,15 +95,26 @@ class MessengerRepository(
         }
     }
 
-    /**
-     * Подключить локальный аккаунт к серверу. Вызывается при входе/регистрации (пароль известен)
-     * или вручную из раздела «Чаты». Если логин на сервере свободен — регистрирует, иначе входит.
-     */
+    /** Вход/регистрация прошли на сервере — подключаем мессенджер этим токеном. */
+    suspend fun onSignedIn(account: MessengerAccount) {
+        store.setAccount(account)
+        store.loadPrivacy(account.username)
+        _state.value = LinkState.CONNECTING
+        scope.launch {
+            runCatching { api.putKey(crypto.publicKey(account.username)) }
+            runCatching { api.setStatus(store.myStatus.value) }
+            runCatching { pushProfile() }
+            connect()
+            runCatching { sync() }
+        }
+    }
+
+    /** Привязка по паролю (резервный путь, если автоматический перенос не прошёл). */
     suspend fun link(username: String, password: String, displayName: String) {
         _state.value = LinkState.CONNECTING
         val token = try {
             try {
-                api.register(username, password, displayName)
+                api.register(username, password, displayName, store.deviceId)
             } catch (e: ApiException) {
                 if (e.error == "username_taken") api.login(username, password) else throw e
             }
@@ -149,24 +164,92 @@ class MessengerRepository(
     }
 
     suspend fun send(peer: String, text: String) {
-        val acc = store.account.value ?: throw ApiException(0, "not_linked", "Мессенджер не подключён")
-        val clean = text.trim().take(4000)
+        val clean = text.trim().take(MAX_CHARS)
         if (clean.isEmpty()) return
-        val theirKey = peerKey(peer, refresh = true) ?: throw ApiException(0, "no_key", "@$peer ещё не включил шифрование — попросите его открыть «Мессенджер»")
+        sendPayload(peer, clean, null)
+    }
+
+    /** Отправка: для себя («Избранное») — своим ключом, иначе — ключом собеседника и копия себе. */
+    private suspend fun sendPayload(peer: String, text: String, media: JSONObject?) {
+        val acc = store.account.value ?: throw ApiException(0, "not_linked", "Мессенджер не подключён")
+        val self = peer == acc.username
         val myKey = crypto.publicKey(acc.username)
-        val payload = JSONObject().put("v", 1).put("text", clean).toString()
+        val theirKey = if (self) myKey else peerKey(peer, refresh = true)
+            ?: throw ApiException(0, "no_key", "@$peer ещё не включил шифрование — попросите его открыть «Мессенджер»")
+        val payload = JSONObject().put("v", 1).put("text", text).apply { if (media != null) put("media", media) }.toString()
         val clientId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
-        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, clean, now))
+        val kind = if (media != null) "media" else "text"
+        val localMedia = media?.toString()
+        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, now, kind = kind, media = localMedia))
+        val ct = crypto.encrypt(theirKey, payload, acc.username, peer)
         val (id, createdAt) = api.send(
             to = peer,
-            ctRecipient = crypto.encrypt(theirKey, payload, acc.username, peer),
-            ctSender = crypto.encrypt(myKey, payload, acc.username, peer),
+            ctRecipient = ct,
+            ctSender = if (self) ct else crypto.encrypt(myKey, payload, acc.username, peer),
             clientId = clientId,
+            mediaIds = listOfNotNull(media?.optString("id")),
         )
-        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, clean, createdAt, id))
-        if (id > store.lastMessageId) store.setLastRead(peer, id)
+        chatDao.upsert(ChatMessageEntity(clientId, acc.username, peer, true, text, createdAt, id, kind = kind, media = localMedia))
+        store.setLastRead(peer, id)
     }
+
+    // ---------- медиа (сквозное шифрование файлов) ----------
+
+    private val mediaDir get() = java.io.File(context.cacheDir, "chat_media").apply { mkdirs() }
+
+    /** Отправить фото/видео/GIF/файл: шифруем на устройстве, загружаем шифротекст, ключ — внутри сообщения. */
+    suspend fun sendMedia(peer: String, uri: android.net.Uri, caption: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val cr = context.contentResolver
+        var name = "file"
+        var size = -1L
+        cr.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME).takeIf { it >= 0 }?.let { name = c.getString(it) ?: name }
+                c.getColumnIndex(android.provider.OpenableColumns.SIZE).takeIf { it >= 0 }?.let { size = c.getLong(it) }
+            }
+        }
+        if (size > MAX_MEDIA_BYTES) throw ApiException(413, "file_too_large", "Файл больше 30 МБ")
+        val bytes = cr.openInputStream(uri)?.use { input ->
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > MAX_MEDIA_BYTES) throw ApiException(413, "file_too_large", "Файл больше 30 МБ")
+                out.write(buf, 0, n)
+            }
+            out.toByteArray()
+        } ?: throw ApiException(0, "read", "Не удалось прочитать файл")
+        val mime = cr.getType(uri) ?: "application/octet-stream"
+        val (cipher, key, nonce) = crypto.encryptFile(bytes)
+        val id = api.uploadMedia(cipher)
+        // Своя копия — сразу в кэш, чтобы показать без скачивания.
+        java.io.File(mediaDir, id + extFor(mime, name)).writeBytes(bytes)
+        val media = JSONObject().put("id", id).put("key", key).put("nonce", nonce).put("mime", mime).put("name", name).put("size", bytes.size)
+        sendPayload(peer, caption.trim().take(MAX_CHARS), media)
+    }
+
+    /** Расшифрованный файл вложения (скачивается при первом открытии). */
+    suspend fun mediaFile(media: JSONObject): java.io.File = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val id = media.getString("id")
+        val file = java.io.File(mediaDir, id + extFor(media.optString("mime"), media.optString("name")))
+        if (!file.exists()) {
+            val plain = crypto.decryptFile(api.downloadMedia(id), media.getString("key"), media.getString("nonce"))
+            file.writeBytes(plain)
+        }
+        file
+    }
+
+    private fun extFor(mime: String, name: String): String {
+        val fromName = name.substringAfterLast('.', "").takeIf { it.length in 1..5 }
+        val fromMime = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+        return "." + (fromName ?: fromMime ?: "bin")
+    }
+
+    suspend fun limits() = api.limits()
 
     /** Догружает всё новое с сервера. */
     suspend fun sync(): Int = syncLock.withLock {
@@ -189,13 +272,15 @@ class MessengerRepository(
     private suspend fun process(me: String, m: RemoteMessage) {
         val outgoing = m.from == me
         val peer = if (outgoing) m.to else m.from
-        val text = crypto.decrypt(me, m.ciphertext, m.from, m.to)
-            ?.let { runCatching { JSONObject(it).optString("text") }.getOrNull() }
+        val payload = crypto.decrypt(me, m.ciphertext, m.from, m.to)?.let { runCatching { JSONObject(it) }.getOrNull() }
+        val text = payload?.optString("text")
+        val media = payload?.optJSONObject("media")
         chatDao.upsert(
             ChatMessageEntity(
                 clientId = m.clientId, owner = me, peer = peer, outgoing = outgoing,
-                text = text ?: "🔒 Не удалось расшифровать (сообщение для другого ключа)",
-                createdAt = m.createdAt, serverId = m.id, readable = text != null,
+                text = if (payload == null) "🔒 Не удалось расшифровать (сообщение для другого ключа)" else text.orEmpty(),
+                createdAt = m.createdAt, serverId = m.id, readable = payload != null,
+                kind = if (media != null) "media" else "text", media = media?.toString(),
             )
         )
         if (outgoing) store.setLastRead(peer, m.id)
@@ -203,7 +288,11 @@ class MessengerRepository(
         else if (m.id > store.notifiedId) {
             store.notifiedId = m.id
             // «Не беспокоить» — без уведомлений
-            if (store.myStatus.value != "DND") incoming.value = IncomingEvent(peer, text ?: "Новое сообщение")
+            val preview = when {
+                media != null -> "📎 " + (text?.takeIf { it.isNotBlank() } ?: media.optString("name", "Вложение"))
+                else -> text ?: "Новое сообщение"
+            }
+            if (store.myStatus.value != "DND" && peer != me) incoming.value = IncomingEvent(peer, preview)
         }
     }
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "1.1-beta.3"
+        versionCode = 32
+        versionName = "1.1-beta.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "MESSENGER_URL", "\"${project.findProperty("messenger.url") ?: ""}\"")
@@ -99,6 +99,7 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     implementation(libs.osmdroid)
     implementation(libs.okhttp)
     implementation(libs.tink.android)

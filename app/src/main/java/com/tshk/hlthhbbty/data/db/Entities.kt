@@ -199,6 +199,10 @@ data class ChatMessageEntity(
     val serverId: Long = 0,
     /** false — не удалось расшифровать. */
     val readable: Boolean = true,
+    /** text или media. */
+    @ColumnInfo(defaultValue = "text") val kind: String = "text",
+    /** Вложение (JSON: id, key, nonce, mime, name, size) — ключ хранится только на устройстве. */
+    val media: String? = null,
 )
 
 data class ConversationRow(

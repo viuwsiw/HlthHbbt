@@ -53,6 +53,25 @@ class E2eCrypto(private val context: Context) {
         String(dec.decrypt(Base64.decode(ciphertext, Base64.NO_WRAP), context(from, to)))
     }.getOrNull()
 
+    /** Шифрование файла: случайный ключ AES-256 и nonce на каждый файл. Возвращает (шифротекст, ключ, nonce). */
+    fun encryptFile(plain: ByteArray): Triple<ByteArray, String, String> {
+        val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val nonce = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, javax.crypto.spec.SecretKeySpec(key, "AES"), javax.crypto.spec.GCMParameterSpec(128, nonce))
+        return Triple(cipher.doFinal(plain), Base64.encodeToString(key, Base64.NO_WRAP), Base64.encodeToString(nonce, Base64.NO_WRAP))
+    }
+
+    fun decryptFile(cipherBytes: ByteArray, key: String, nonce: String): ByteArray {
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            javax.crypto.Cipher.DECRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(Base64.decode(key, Base64.NO_WRAP), "AES"),
+            javax.crypto.spec.GCMParameterSpec(128, Base64.decode(nonce, Base64.NO_WRAP)),
+        )
+        return cipher.doFinal(cipherBytes)
+    }
+
     /** Код безопасности чата: одинаков у обоих собеседников, если ключи не подменены. */
     fun safetyCode(keyA: String, keyB: String): String {
         val (x, y) = listOf(keyA, keyB).sorted()

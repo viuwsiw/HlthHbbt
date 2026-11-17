@@ -20,10 +20,22 @@ import (
 )
 
 type Server struct {
-	db      *sql.DB
-	hub     *Hub
-	limiter *Limiter
+	db                *sql.DB
+	hub               *Hub
+	limiter           *Limiter
+	mediaDir          string
+	maxAccountsDevice int
+	maxAccountsTotal  int
+	mediaTTLDays      int
 }
+
+// Лимиты контента.
+const (
+	MaxMessagesPerUser = 999_999
+	MaxMessageChars    = 5000
+	MaxMediaBytes      = 30 << 20  // 30 МБ на файл (после шифрования + небольшой запас)
+	DailyMediaBytes    = 300 << 20 // 300 МБ за 24 часа с первой выгрузки
+)
 
 var usernameRe = regexp.MustCompile(`^[a-z0-9_.]{3,24}$`)
 
@@ -44,6 +56,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true}) })
 	mux.HandleFunc("POST /v1/auth/register", s.limit(s.register))
 	mux.HandleFunc("POST /v1/auth/login", s.limit(s.login))
+	mux.HandleFunc("POST /v1/auth/import", s.limit(s.importAccount))
+	mux.HandleFunc("PUT /v1/me/password", s.auth(s.changePassword))
+	mux.HandleFunc("GET /v1/me/limits", s.auth(s.limits))
+	mux.HandleFunc("POST /v1/media", s.auth(s.uploadMedia))
+	mux.HandleFunc("GET /v1/media/{id}", s.auth(s.downloadMedia))
 	mux.HandleFunc("POST /v1/auth/logout", s.auth(s.logout))
 	mux.HandleFunc("GET /v1/me", s.auth(s.me))
 	mux.HandleFunc("DELETE /v1/me", s.auth(s.deleteMe))
@@ -69,6 +86,42 @@ type authReq struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	DisplayName string `json:"displayName"`
+	DeviceID    string `json:"deviceId"`
+}
+
+// checkAccountLimit — не больше N аккаунтов с одного устройства (и общий предел, если задан).
+func (s *Server) checkAccountLimit(w http.ResponseWriter, deviceID string) bool {
+	if s.maxAccountsTotal > 0 {
+		var total int
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total)
+		if total >= s.maxAccountsTotal {
+			fail(w, 403, "accounts_limit", "Регистрация закрыта: достигнут лимит аккаунтов на сервере")
+			return false
+		}
+	}
+	if deviceID == "" || len(deviceID) > 64 {
+		fail(w, 400, "bad_device", "Обновите приложение")
+		return false
+	}
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM registrations WHERE device_id=?`, deviceID).Scan(&n)
+	if n >= s.maxAccountsDevice {
+		fail(w, 403, "accounts_limit", "Лимит: не больше "+strconv.Itoa(s.maxAccountsDevice)+" аккаунтов с одного устройства")
+		return false
+	}
+	return true
+}
+
+func (s *Server) recordRegistration(r *http.Request, deviceID string) {
+	_, _ = s.db.Exec(`INSERT INTO registrations(device_id, ip, created_at) VALUES(?,?,?)`, deviceID, clientIP(r), time.Now().Unix())
+}
+
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -89,13 +142,16 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if req.DisplayName == "" || utf8.RuneCountInString(req.DisplayName) > 40 {
 		req.DisplayName = req.Username
 	}
+	if !s.checkAccountLimit(w, req.DeviceID) {
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 11)
 	if err != nil {
 		fail(w, 500, "internal", "Ошибка сервера")
 		return
 	}
-	res, err := s.db.Exec(`INSERT INTO users(username, display_name, pass_hash, created_at) VALUES(?,?,?,?)`,
-		req.Username, req.DisplayName, string(hash), time.Now().Unix())
+	res, err := s.db.Exec(`INSERT INTO users(username, display_name, pass_hash, created_at, device_id) VALUES(?,?,?,?,?)`,
+		req.Username, req.DisplayName, string(hash), time.Now().Unix(), req.DeviceID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			fail(w, 409, "username_taken", "Логин уже занят")
@@ -105,6 +161,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	s.recordRegistration(r, req.DeviceID)
 	s.issueToken(w, id, req.Username)
 }
 
@@ -117,9 +174,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var id int64
 	var hash string
 	err := s.db.QueryRow(`SELECT id, pass_hash FROM users WHERE username=?`, req.Username).Scan(&id, &hash)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+	if err != nil || !checkPassword(hash, req.Password) {
 		fail(w, 401, "bad_credentials", "Неверный логин или пароль")
 		return
+	}
+	// Перенесённый аккаунт: после первого входа меняем PBKDF2 на bcrypt.
+	if strings.HasPrefix(hash, "pbkdf2$") {
+		if h, err := bcrypt.GenerateFromPassword([]byte(req.Password), 11); err == nil {
+			_, _ = s.db.Exec(`UPDATE users SET pass_hash=? WHERE id=?`, string(h), id)
+		}
 	}
 	s.issueToken(w, id, req.Username)
 }
@@ -428,10 +491,11 @@ func (s *Server) idByUsername(w http.ResponseWriter, username string) (int64, bo
 // ---------- messages (только шифротекст) ----------
 
 type msgReq struct {
-	To          string `json:"to"`
-	CtRecipient string `json:"ctRecipient"`
-	CtSender    string `json:"ctSender"`
-	ClientID    string `json:"clientId"`
+	To          string   `json:"to"`
+	CtRecipient string   `json:"ctRecipient"`
+	CtSender    string   `json:"ctSender"`
+	ClientID    string   `json:"clientId"`
+	MediaIDs    []string `json:"mediaIds"`
 }
 
 type message struct {
@@ -448,12 +512,22 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) 
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if len(req.CtRecipient) == 0 || len(req.CtRecipient) > 64*1024 || len(req.CtSender) > 64*1024 || len(req.ClientID) == 0 || len(req.ClientID) > 64 {
+	if len(req.CtRecipient) == 0 || len(req.CtRecipient) > 96*1024 || len(req.CtSender) > 96*1024 || len(req.ClientID) == 0 || len(req.ClientID) > 64 {
 		fail(w, 400, "bad_message", "Некорректное сообщение")
 		return
 	}
 	to, ok := s.idByUsername(w, req.To)
 	if !ok {
+		return
+	}
+	var sent int
+	_ = s.db.QueryRow(`SELECT msg_count FROM users WHERE id=?`, u.ID).Scan(&sent)
+	if sent >= MaxMessagesPerUser {
+		fail(w, 403, "messages_limit", "Достигнут лимит: 999 999 сообщений на аккаунт")
+		return
+	}
+	if len(req.MediaIDs) > 10 {
+		fail(w, 400, "too_many_media", "Не больше 10 файлов в сообщении")
 		return
 	}
 	now := time.Now().UnixMilli()
@@ -466,9 +540,17 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) 
 	id, _ := res.LastInsertId()
 	if n, _ := res.RowsAffected(); n == 0 { // повторная отправка — возвращаем существующее
 		_ = s.db.QueryRow(`SELECT id, created_at FROM messages WHERE sender_id=? AND client_id=?`, u.ID, req.ClientID).Scan(&id, &now)
+	} else {
+		_, _ = s.db.Exec(`UPDATE users SET msg_count=msg_count+1 WHERE id=?`, u.ID)
+		// Доступ к вложениям — только своим файлам, только получателю этого сообщения.
+		for _, mid := range req.MediaIDs {
+			_, _ = s.db.Exec(`INSERT OR IGNORE INTO media_access(media_id, user_id) SELECT id, ? FROM media WHERE id=? AND owner_id=?`, to, mid, u.ID)
+		}
 	}
 	toName := strings.ToLower(req.To)
-	s.hub.send(to, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtRecipient, req.ClientID, now}})
+	if to != u.ID { // «Избранное» — себе, одно событие
+		s.hub.send(to, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtRecipient, req.ClientID, now}})
+	}
 	s.hub.send(u.ID, map[string]any{"type": "message", "message": message{id, u.Username, toName, req.CtSender, req.ClientID, now}})
 	writeJSON(w, 200, map[string]any{"id": id, "createdAt": now})
 }
@@ -498,7 +580,9 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request, u ctxUser)
 
 func withLimits(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+		if r.URL.Path != "/v1/media" {
+			r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		h.ServeHTTP(w, r)
 	})

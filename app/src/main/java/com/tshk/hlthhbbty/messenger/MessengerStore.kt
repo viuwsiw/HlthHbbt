@@ -86,6 +86,17 @@ class MessengerStore(context: Context) {
         if (id > lastRead(peer)) prefs.edit().putLong("read_${_account.value?.username}_$peer", id).apply()
     }
 
+    /** Постоянный идентификатор устройства (для лимита аккаунтов на устройство). */
+    val deviceId: String = prefs.getString("device_id", null) ?: java.util.UUID.randomUUID().toString().also {
+        prefs.edit().putString("device_id", it).apply()
+    }
+
+    fun isMigrated(username: String) = prefs.getBoolean("migrated_$username", false)
+    fun setMigrated(username: String) = prefs.edit().putBoolean("migrated_$username", true).remove("conflict_$username").apply()
+    /** Логин занят на сервере другим человеком — нужен новый логин. */
+    fun hasConflict(username: String) = prefs.getBoolean("conflict_$username", false)
+    fun setConflict(username: String) = prefs.edit().putBoolean("conflict_$username", true).apply()
+
     private val _myStatus = MutableStateFlow(prefs.getString("my_status", "ONLINE") ?: "ONLINE")
     /** Выбранный вручную статус: ONLINE или DND. */
     val myStatus: StateFlow<String> = _myStatus.asStateFlow()

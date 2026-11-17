@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
@@ -81,6 +83,7 @@ fun ChatsScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val localUsername by vm.localUsername.collectAsStateWithLifecycle()
     val presence by vm.presence.collectAsStateWithLifecycle()
+    val conflict by vm.conflict.collectAsStateWithLifecycle()
     val myStatus by vm.myStatus.collectAsStateWithLifecycle()
     var statusPicker by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -131,6 +134,7 @@ fun ChatsScreen(
         }
         when {
             server.isBlank() -> item { ServerSetupCard(onSave = vm::setServer) }
+            account == null && conflict -> item { ConflictCard(localUsername, busy, error, onClaim = vm::claimNewUsername) }
             account == null -> item { LinkCard(localUsername, busy, error, onLink = vm::link) }
             else -> {
                 item {
@@ -143,13 +147,19 @@ fun ChatsScreen(
                         PersonRow(u.avatar, u.displayName, "@${u.username}", null, false, Modifier.appear(i), status = (presence[u.username] ?: u.presence)?.status) { onOpenUser(u.username) }
                     }
                 } else {
-                    if (conversations.isEmpty()) {
+                    val me = account!!.username
+                    val saved = conversations.firstOrNull { it.row.peer == me }
+                    item(key = "saved") {
+                        SavedRow(saved?.row?.lastText?.ifBlank { "📎 Вложение" }, Modifier.appear(2)) { onOpenChat(me) }
+                    }
+                    val others = conversations.filter { it.row.peer != me }
+                    if (others.isEmpty()) {
                         item { Hint("Пока нет переписок. Найдите друга по логину и откройте его страницу.") }
                     }
-                    itemsIndexed(conversations, key = { _, c -> "c_" + c.row.peer }) { i, c ->
+                    itemsIndexed(others, key = { _, c -> "c_" + c.row.peer }) { i, c ->
                         PersonRow(
                             avatar = "", name = "@" + c.row.peer,
-                            subtitle = (if (c.row.lastOutgoing) "Вы: " else "") + c.row.lastText,
+                            subtitle = (if (c.row.lastOutgoing) "Вы: " else "") + c.row.lastText.ifBlank { "📎 Вложение" },
                             time = chatTime(c.row.lastAt), unread = c.unread, modifier = Modifier.appear(i + 2),
                             status = presence[c.row.peer]?.status,
                         ) { onOpenChat(c.row.peer) }
@@ -190,6 +200,28 @@ private fun StatusPicker(current: String, onPick: (String) -> Unit, onDismiss: (
             Spacer(Modifier.width(12.dp))
             Text("«Вне чата» включается сам, когда вы вышли из мессенджера или закрыли приложение.",
                 style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+        }
+    }
+}
+
+/** «Избранное» — чат с самим собой для заметок и файлов. */
+@Composable
+private fun SavedRow(last: String?, modifier: Modifier, onClick: () -> Unit) {
+    val p = Liquid.palette
+    GlassCard(modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp), onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(46.dp).clip(CircleShape)
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(p.accent, p.accentSecondary))),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(Icons.Rounded.Bookmark, null, tint = p.onAccent)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Избранное", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                Text(last ?: "Заметки, фото и файлы — только для вас", style = MaterialTheme.typography.bodySmall, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -242,6 +274,28 @@ private fun LinkCard(username: String?, busy: Boolean, error: String?, onLink: (
         GlassTextField(password, { password = it }, "Пароль", isPassword = true, imeAction = ImeAction.Done, onImeAction = { onLink(password) }, error = error)
         VSpace(12.dp)
         GlassButton("Подключить", { onLink(password) }, Modifier.fillMaxWidth(), loading = busy, enabled = password.length >= 6)
+    }
+}
+
+@Composable
+private fun ConflictCard(username: String?, busy: Boolean, error: String?, onClaim: (String, String) -> Unit) {
+    val p = Liquid.palette
+    var login by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    GlassCard(Modifier.fillMaxWidth().appear(1)) {
+        Text("Логин @${username ?: "…"} занят", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+        VSpace(6.dp)
+        Text(
+            "На сервере уже есть пользователь с таким логином. Выберите новый — привычки и данные на этом устройстве сохранятся.",
+            style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
+        )
+        VSpace(12.dp)
+        GlassTextField(login, { login = it.trim().lowercase() }, "Новый логин", leadingIcon = androidx.compose.material.icons.Icons.Rounded.AlternateEmail)
+        VSpace(10.dp)
+        GlassTextField(password, { password = it }, "Пароль от приложения", isPassword = true, imeAction = ImeAction.Done,
+            onImeAction = { onClaim(login, password) }, error = error)
+        VSpace(12.dp)
+        GlassButton("Сохранить логин", { onClaim(login, password) }, Modifier.fillMaxWidth(), loading = busy, enabled = login.length >= 3 && password.length >= 6)
     }
 }
 

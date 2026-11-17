@@ -25,6 +25,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.foundation.layout.heightIn
+import com.tshk.hlthhbbty.messenger.MAX_CHARS
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -66,6 +72,15 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
     MessengerPresence(vm.m)
     var text by rememberSaveable { mutableStateOf("") }
     var showSecurity by rememberSaveable { mutableStateOf(false) }
+    var attachMenu by rememberSaveable { mutableStateOf(false) }
+    val uploading by vm.uploading.collectAsStateWithLifecycle()
+    val self = vm.isSelf
+    val pickMedia = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) { vm.sendMedia(uri, text); text = "" } }
+    val pickFile = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) { vm.sendMedia(uri, text); text = "" } }
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex) }
 
@@ -74,18 +89,32 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
             Spacer(Modifier.width(12.dp))
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onOpenUser(vm.peer) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box {
-                    UserAvatar(profile?.avatar?.ifBlank { null }, profile?.displayName ?: vm.peer, 40.dp)
-                    StatusDot(presence?.status, 12.dp, Modifier.align(Alignment.BottomEnd))
+            if (self) {
+                Row(Modifier.weight(1f).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Brush.linearGradient(listOf(p.accent, p.accentSecondary))), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Bookmark, null, tint = p.onAccent, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("Избранное", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                        Text("Видно только вам · зашифровано", style = MaterialTheme.typography.labelSmall, color = p.textSecondary)
+                    }
                 }
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(profile?.displayName ?: "@${vm.peer}", style = MaterialTheme.typography.titleMedium, color = p.textPrimary, maxLines = 1)
-                    Text(statusLabel(presence), style = MaterialTheme.typography.labelSmall, color = statusColor(presence?.status), maxLines = 1)
+            } else {
+                Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onOpenUser(vm.peer) }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        UserAvatar(profile?.avatar?.ifBlank { null }, profile?.displayName ?: vm.peer, 40.dp)
+                        StatusDot(presence?.status, 12.dp, Modifier.align(Alignment.BottomEnd))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(profile?.displayName ?: "@${vm.peer}", style = MaterialTheme.typography.titleMedium, color = p.textPrimary, maxLines = 1)
+                        Text(statusLabel(presence), style = MaterialTheme.typography.labelSmall, color = statusColor(presence?.status), maxLines = 1)
+                    }
                 }
+                GlassIconButton(Icons.Rounded.Lock, "Шифрование", { showSecurity = true }, tint = p.accent)
             }
-            GlassIconButton(Icons.Rounded.Lock, "Шифрование", { showSecurity = true }, tint = p.accent)
         }
         // Сообщения
         LazyColumn(
@@ -96,19 +125,48 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
         ) {
             item {
                 Text(
-                    "🔒 Сообщения защищены сквозным шифрованием. Прочитать их можете только вы и @${vm.peer}.",
+                    if (self) "⭐ Избранное: заметки, фото, видео и файлы. Зашифровано вашим ключом — не видно никому, даже серверу."
+                    else "🔒 Сообщения защищены сквозным шифрованием. Прочитать их можете только вы и @${vm.peer}.",
                     style = MaterialTheme.typography.labelSmall, color = p.textSecondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(8.dp).glass(RoundedCornerShape(14.dp)).padding(10.dp),
                 )
             }
-            items(messages, key = { it.clientId }) { m -> Bubble(m) }
+            items(messages, key = { it.clientId }) { m -> Bubble(m, vm) }
         }
         if (error != null) {
             Text(error!!, color = p.danger, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         }
         // Ввод
+        if (uploading) {
+            Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = p.accent, strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("Шифруем и отправляем файл…", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+            }
+        }
+        if (text.length > MAX_CHARS - 500) {
+            Text("${text.length} / $MAX_CHARS", style = MaterialTheme.typography.labelSmall,
+                color = if (text.length >= MAX_CHARS) p.danger else p.textSecondary, modifier = Modifier.padding(horizontal = 24.dp))
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassTextField(text, { text = it.take(4000) }, "Сообщение", Modifier.weight(1f), singleLine = false, imeAction = ImeAction.Default)
+            Box {
+                GlassIconButton(Icons.Rounded.AttachFile, "Вложение", { attachMenu = true }, size = 48.dp)
+                androidx.compose.material3.DropdownMenu(attachMenu, { attachMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Фото, видео, GIF") },
+                        onClick = {
+                            attachMenu = false
+                            pickMedia.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                        },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Файл") },
+                        onClick = { attachMenu = false; pickFile.launch(arrayOf("*/*")) },
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            GlassTextField(text, { text = it.take(MAX_CHARS) }, "Сообщение", Modifier.weight(1f), singleLine = false, imeAction = ImeAction.Default)
             Spacer(Modifier.width(8.dp))
             GlassIconButton(Icons.AutoMirrored.Rounded.Send, "Отправить", {
                 if (text.isNotBlank()) { vm.send(text); text = "" }
@@ -131,7 +189,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenUser: (String) -> Unit, vm: ChatViewMod
 }
 
 @Composable
-private fun Bubble(m: ChatMessageEntity) {
+private fun Bubble(m: ChatMessageEntity, vm: ChatViewModel) {
     val p = Liquid.palette
     val shape = RoundedCornerShape(
         topStart = 20.dp, topEnd = 20.dp,
@@ -148,12 +206,61 @@ private fun Bubble(m: ChatMessageEntity) {
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            Text(m.text, style = MaterialTheme.typography.bodyMedium, color = if (m.outgoing) p.onAccent else if (m.readable) p.textPrimary else p.textSecondary)
+            if (m.kind == "media" && m.media != null) MediaContent(m.media, m.outgoing, vm)
+            if (m.text.isNotBlank()) Text(m.text, style = MaterialTheme.typography.bodyMedium, color = if (m.outgoing) p.onAccent else if (m.readable) p.textPrimary else p.textSecondary)
             Text(
                 chatTime(m.createdAt) + if (m.outgoing) (if (m.serverId > 0) "  ✓" else "  ⏳") else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = if (m.outgoing) p.onAccent.copy(alpha = 0.75f) else p.textSecondary,
             )
+        }
+    }
+}
+
+
+/** Вложение: фото/GIF — превью, видео и файлы — карточка; открывается системным приложением. */
+@Composable
+private fun MediaContent(json: String, outgoing: Boolean, vm: ChatViewModel) {
+    val p = Liquid.palette
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val meta = androidx.compose.runtime.remember(json) { runCatching { org.json.JSONObject(json) }.getOrNull() } ?: return
+    val mime = meta.optString("mime")
+    val name = meta.optString("name", "файл")
+    val size = meta.optLong("size")
+    val file by androidx.compose.runtime.produceState<java.io.File?>(null, json) { value = vm.mediaFile(json) }
+    val color = if (outgoing) p.onAccent else p.textPrimary
+    fun open() {
+        val f = file ?: return
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".updates", f)
+        runCatching {
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+    when {
+        mime.startsWith("image/") -> Box(
+            Modifier.padding(bottom = 4.dp).clip(RoundedCornerShape(14.dp)).clickable { open() },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (file != null) coil.compose.AsyncImage(file, name, Modifier.widthIn(max = 260.dp).heightIn(max = 320.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+            else Box(Modifier.size(200.dp, 140.dp).background(p.textSecondary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(24.dp), color = p.accent, strokeWidth = 2.dp)
+            }
+        }
+        else -> Row(
+            Modifier.padding(bottom = 4.dp).clip(RoundedCornerShape(14.dp)).clickable { open() }.padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                if (file == null) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = color, strokeWidth = 2.dp)
+                else Icon(if (mime.startsWith("video/")) Icons.Rounded.PlayArrow else Icons.Rounded.Description, null, tint = color)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(name, style = MaterialTheme.typography.bodyMedium, color = color, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 200.dp))
+                Text("%.1f МБ".format(size / 1_048_576f), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.7f))
+            }
         }
     }
 }

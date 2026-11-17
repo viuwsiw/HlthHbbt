@@ -45,6 +45,7 @@ androidx-health-connect = { group = "androidx.health.connect", name = "connect-c
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
 osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
+coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
