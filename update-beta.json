@@ -1,7 +1,7 @@
 {
-  "versionCode": 29,
-  "versionName": "1.1-beta.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/9cf0e283a392b32860f4865b616bb948eac7b002/dist/HLTH-HBTy-29.apk",
+  "versionCode": 30,
+  "versionName": "1.1-beta.2",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/f06b38a8664d322f86a82f7fcd2e152f6ccd2c79/dist/HLTH-HBTy-30.apk",
   "size": 4405700,
-  "changelog": "Бета 1.1: мессенджер\n• Вкладка «Чаты» со сквозным шифрованием\n• Поиск людей по логину и их страницы\n• Настройки конфиденциальности статистики привычек"
+  "changelog": "Бета 1.1 (2): адрес сервера мессенджера встроен — ничего вводить не нужно"
 }
