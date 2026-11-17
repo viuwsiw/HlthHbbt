@@ -83,31 +83,50 @@ struct StatsCard: View {
     @EnvironmentObject var app: AppModel
     @Environment(\.palette) private var p
 
-    var body: some View {
+    private func values() -> [Double] {
         let h = app.history
         let today = Days.today
-        let days = (0..<30).reversed().map { today - Int64($0) }
-        let values = days.map { h.completion($0) ?? 0 }
-        let avg = values.reduce(0, +) / Double(max(1, values.count))
+        var out: [Double] = []
+        for back in stride(from: 29, through: 0, by: -1) {
+            out.append(h.completion(today - Int64(back)) ?? 0)
+        }
+        return out
+    }
+
+    private func avgWater() -> Int {
+        let h = app.history
+        let today = Days.today
+        var sum = 0
+        for back in 0..<7 { sum += h.waterByDay[today - Int64(back)] ?? 0 }
+        return sum / 7
+    }
+
+    private func bar(_ v: Double) -> some View {
+        let style: AnyShapeStyle = v >= 1 ? AnyShapeStyle(p.gradient) : AnyShapeStyle(p.accent.opacity(0.35))
+        let height: CGFloat = max(4, 80 * CGFloat(v))
+        return RoundedRectangle(cornerRadius: 3).fill(style).frame(height: height).frame(maxWidth: .infinity)
+    }
+
+    var body: some View {
+        let vals = values()
+        let avg: Double = vals.reduce(0, +) / Double(max(1, vals.count))
+        let percent = Int(avg * 100)
+        let water = avgWater()
+        let walks = app.data.walks.count
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("30 дней").font(.headline).foregroundStyle(p.text)
                 Spacer()
-                Text("\(Int(avg * 100))% выполнено").font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
+                Text("\(percent)% выполнено").font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
             }
             HStack(alignment: .bottom, spacing: 3) {
-                ForEach(values.indices, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(values[i] >= 1 ? AnyShapeStyle(p.gradient) : AnyShapeStyle(p.accent.opacity(0.35)))
-                        .frame(height: max(4, 80 * values[i]))
-                        .frame(maxWidth: .infinity)
-                }
+                ForEach(0..<vals.count, id: \.self) { i in bar(vals[i]) }
             }
             .frame(height: 80, alignment: .bottom)
             HStack {
-                Text("💧 Сред. вода: \((0..<7).map { h.waterByDay[today - Int64($0)] ?? 0 }.reduce(0, +) / 7) мл").font(.caption).foregroundStyle(p.text2)
+                Text("💧 Сред. вода: \(water) мл").font(.caption).foregroundStyle(p.text2)
                 Spacer()
-                Text("🚶 Прогулок: \(app.data.walks.count)").font(.caption).foregroundStyle(p.text2)
+                Text("🚶 Прогулок: \(walks)").font(.caption).foregroundStyle(p.text2)
             }
         }
         .glassCard()
