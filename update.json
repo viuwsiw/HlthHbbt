@@ -1,7 +1,7 @@
 {
-  "versionCode": 33,
-  "versionName": "1.1",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/0f7d97ce64c1d2cd349a5ef1d3c0130c6e3d97bb/dist/HLTH-HBTy-33.apk",
-  "size": 4471320,
-  "changelog": "HLTH HBTy 1.1 🎉\n• Аккаунты на сервере и облачная копия со сквозным шифрованием\n• Мессенджер: «Избранное», медиа, статусы, что играет у собеседника\n• «О себе» в профиле\n• Антиспам"
+  "versionCode": 34,
+  "versionName": "1.2",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/e9b63cf4b03c7eef575106cfa72053365e9e3607/dist/HLTH-HBTy-34.apk",
+  "size": 4553472,
+  "changelog": "HLTH HBTy 1.2 — Мессенджер 2.0\n• Голосовые до 5 минут, встроенный просмотр фото и видео\n• Группы до 5 участников, фото профиля видно собеседникам\n• «Прочитано» и «Прослушано», закрепы, предпросмотр, удаление переписки\n• Мгновенные уведомления о сообщениях"
 }
