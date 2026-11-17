@@ -36,6 +36,7 @@ for f in dist/*.apk; do
   git rm -q --ignore-unmatch "$f" >/dev/null 2>&1 || true
   rm -f "$f"
 done
+mkdir -p dist # git rm последнего файла удаляет и саму папку
 OUT="dist/HLTH-HBTy-$CODE.apk"
 cp "$APK" "$OUT"
 SIZE=$(stat -c %s "$OUT")
