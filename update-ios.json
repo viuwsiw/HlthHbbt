@@ -1,6 +1,6 @@
 {
-  "build": 34,
-  "versionName": "1.1.1",
-  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.1.1-ios.ipa",
-  "changelog": "HLTH HBTy 1.1.1 для iOS\n• Системный Liquid Glass iOS 26: вкладки, навигация, кнопки, поиск\n• Поле ввода в чате больше не перекрывается\n• Ничего не накладывается друг на друга\n• Привычки на главной — в раскрывашке"
+  "build": 35,
+  "versionName": "1.1.2",
+  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.1.2-ios.ipa",
+  "changelog": "HLTH HBTy 1.1.2 для iOS\n• Карта прогулки: панель не прячется, камера следует за вами\n• Фокус: Live Activity на экране блокировки и в Dynamic Island, «Не беспокоить»\n• Настроение — в «Здоровье» и «Дневник»\n• Подпись обновлений своим сертификатом и установка без компьютера"
 }
