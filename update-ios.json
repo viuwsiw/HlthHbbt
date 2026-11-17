@@ -1,6 +1,6 @@
 {
-  "build": 36,
-  "versionName": "1.2",
-  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2-ios.ipa",
-  "changelog": "HLTH HBTy 1.2 — Мессенджер 2.0\n• Голосовые до 5 минут, встроенный просмотр фото и видео\n• Группы до 5 участников, фото профиля видно собеседникам\n• «Прочитано» и «Прослушано», закрепы, предпросмотр, удаление переписки\n• Глубокая чёрная тема, исправлен выбор .p12 и .mobileprovision"
+  "build": 37,
+  "versionName": "1.2.1",
+  "ipaUrl": "https://github.com/viuwsiw/HlthHbbt/raw/claude/quirky-goodall-is99zk/dist/ios/HLTH-HBTy-1.2.1-ios.ipa",
+  "changelog": "HLTH HBTy 1.2.1 для iOS\n• VPN: VLESS + WebSocket + TLS через системный API Apple — профиль в Настройки → VPN\n• Ключ — с вашего сервера HLTH одной кнопкой или вставкой vless://"
 }
