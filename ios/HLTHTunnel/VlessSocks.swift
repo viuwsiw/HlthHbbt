@@ -5,6 +5,8 @@ import Security
 /// Локальный SOCKS5-сервер (127.0.0.1) для hev-socks5-tunnel: каждое TCP-соединение уходит на сервер
 /// по VLESS поверх WebSocket + TLS. DNS отвечает сам hev (FakeDNS), поэтому сюда приходят доменные имена.
 final class VlessSocksServer {
+    /// IP сервера, определённый до включения туннеля (DNS внутри туннеля отвечает поддельными адресами).
+    static var serverIP: String?
     let config: VlessConfig
     let port: UInt16
     private var listener: NWListener?
@@ -55,7 +57,6 @@ final class VlessSession: Hashable {
     private let onDone: (VlessSession) -> Void
     private var buffer = Data()
     private var stage = 0          // 0 — приветствие, 1 — запрос CONNECT, 2 — передача данных
-    private var gotResponseHeader = false
     private var closed = false
 
     init(client: NWConnection, config: VlessConfig, queue: DispatchQueue, onDone: @escaping (VlessSession) -> Void) {
@@ -133,57 +134,90 @@ final class VlessSession: Hashable {
         return true
     }
 
-    // MARK: VLESS поверх WebSocket
+    // MARK: VLESS поверх WebSocket (свой клиент: TLS по IP, SNI и Host из ключа, HTTP/1.1)
+
+    private var wsBuffer = Data()
+    private var wsReady = false
+    private var respSkip = -1          // сколько байт заголовка ответа VLESS ещё пропустить (-1 — неизвестно)
 
     private func connectRemote(addr: Data, port: Data) {
-        guard let url = config.url else { close(); return }
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
+        tcp.connectionTimeout = 10
         let params: NWParameters
         if config.tls {
             let tls = NWProtocolTLS.Options()
             sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, config.sni)
+            sec_protocol_options_add_tls_application_protocol(tls.securityProtocolOptions, "http/1.1")
             params = NWParameters(tls: tls, tcp: tcp)
         } else {
             params = NWParameters(tls: nil, tcp: tcp)
         }
-        let ws = NWProtocolWebSocket.Options()
-        ws.autoReplyPing = true
-        ws.maximumMessageSize = 1 << 20
-        ws.setAdditionalHeaders([("Host", config.wsHost), ("User-Agent", "Mozilla/5.0")])
-        params.defaultProtocolStack.applicationProtocols.insert(ws, at: 0)
-        let r = NWConnection(to: .url(url), using: params)
+        let target = VlessSocksServer.serverIP ?? config.host
+        let r = NWConnection(host: NWEndpoint.Host(target), port: NWEndpoint.Port(rawValue: UInt16(config.port)) ?? 443, using: params)
         remote = r
-        // Заголовок VLESS: версия 0, UUID, без доп. полей, команда 1 (TCP), порт, адрес.
         var header = Data([0])
         header.append(withUnsafeBytes(of: config.uuid.uuid) { Data($0) })
         header.append(contentsOf: [0, 1])
         header.append(port)
         header.append(addr)
-        let leftover = buffer
+        let firstPayload = header + buffer
         buffer = Data()
         r.stateUpdateHandler = { [weak self] st in
             guard let self else { return }
             switch st {
-            case .ready:
-                self.sendRemote(header + leftover)
-                self.client.send(content: Data([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]), completion: .contentProcessed { _ in })
-                self.pumpClient()
-                self.pumpRemote()
-            case .failed, .cancelled:
-                self.close()
-            case .waiting:
-                self.close()
+            case .ready: self.wsHandshake(firstPayload)
+            case .failed, .cancelled, .waiting: self.close()
             default: break
             }
         }
         r.start(queue: queue)
     }
 
-    private func sendRemote(_ data: Data, then: (() -> Void)? = nil) {
-        let meta = NWProtocolWebSocket.Metadata(opcode: .binary)
-        let ctx = NWConnection.ContentContext(identifier: "vless", metadata: [meta])
-        remote?.send(content: data, contentContext: ctx, isComplete: true, completion: .contentProcessed { [weak self] err in
+    private func wsHandshake(_ firstPayload: Data) {
+        let key = Data((0..<16).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        let path = config.path.hasPrefix("/") ? config.path : "/" + config.path
+        let req = "GET \(path) HTTP/1.1\r\nHost: \(config.wsHost)\r\nUser-Agent: Mozilla/5.0\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: \(key)\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        remote?.send(content: Data(req.utf8), completion: .contentProcessed { [weak self] e in
+            if e != nil { self?.close() }
+        })
+        readHandshakeResponse(firstPayload)
+    }
+
+    private func readHandshakeResponse(_ firstPayload: Data) {
+        remote?.receive(minimumIncompleteLength: 1, maximumLength: 16384) { [weak self] data, _, done, err in
+            guard let self, !self.closed else { return }
+            if let data { self.wsBuffer.append(data) }
+            if err != nil || (done && data == nil) { self.close(); return }
+            guard let end = self.wsBuffer.range(of: Data("\r\n\r\n".utf8)) else {
+                if self.wsBuffer.count > 16384 { self.close() } else { self.readHandshakeResponse(firstPayload) }
+                return
+            }
+            let head = String(decoding: self.wsBuffer[..<end.lowerBound], as: UTF8.self)
+            self.wsBuffer = Data(self.wsBuffer[end.upperBound...])
+            guard head.hasPrefix("HTTP/1.1 101") || head.hasPrefix("HTTP/1.0 101") else { self.close(); return }
+            self.wsReady = true
+            self.sendFrame(firstPayload, opcode: 2)
+            self.client.send(content: Data([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]), completion: .contentProcessed { _ in })
+            self.drainFrames()
+            self.pumpClient()
+            self.pumpRemote()
+        }
+    }
+
+    /// Кадр клиента → сервер (с маской, как требует RFC 6455).
+    private func sendFrame(_ payload: Data, opcode: UInt8, then: (() -> Void)? = nil) {
+        var f = Data([0x80 | opcode])
+        let n = payload.count
+        if n < 126 { f.append(UInt8(0x80 | n)) }
+        else if n < 65536 { f.append(0x80 | 126); f.append(UInt8(n >> 8)); f.append(UInt8(n & 0xFF)) }
+        else { f.append(0x80 | 127); for i in (0..<8).reversed() { f.append(UInt8((n >> (i * 8)) & 0xFF)) } }
+        let mask = (0..<4).map { _ in UInt8.random(in: 0...255) }
+        f.append(contentsOf: mask)
+        var masked = [UInt8](payload)
+        for i in 0..<masked.count { masked[i] ^= mask[i & 3] }
+        f.append(contentsOf: masked)
+        remote?.send(content: f, completion: .contentProcessed { [weak self] err in
             if err != nil { self?.close() } else { then?() }
         })
     }
@@ -192,7 +226,7 @@ final class VlessSession: Hashable {
         client.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, done, err in
             guard let self, !self.closed else { return }
             if let data, !data.isEmpty {
-                self.sendRemote(data) { [weak self] in
+                self.sendFrame(data, opcode: 2) { [weak self] in
                     if done { self?.close() } else { self?.pumpClient() }
                 }
             } else if err != nil || done {
@@ -204,22 +238,58 @@ final class VlessSession: Hashable {
     }
 
     private func pumpRemote() {
-        remote?.receiveMessage { [weak self] data, _, _, err in
+        remote?.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, done, err in
             guard let self, !self.closed else { return }
-            if err != nil { self.close(); return }
-            guard var d = data else { self.pumpRemote(); return }
-            if !self.gotResponseHeader {
-                // Ответ VLESS: версия + длина доп. полей + сами поля
-                guard d.count >= 2 else { self.pumpRemote(); return }
-                let addons = Int(d[d.startIndex + 1])
-                guard d.count >= 2 + addons else { self.close(); return }
-                d = d.dropFirst(2 + addons)
-                self.gotResponseHeader = true
-            }
-            if d.isEmpty { self.pumpRemote(); return }
-            self.client.send(content: Data(d), completion: .contentProcessed { [weak self] e in
-                if e != nil { self?.close() } else { self?.pumpRemote() }
-            })
+            if let data { self.wsBuffer.append(data) }
+            if err != nil || (done && data == nil) { self.close(); return }
+            self.drainFrames()
+            if !self.closed { self.pumpRemote() }
         }
+    }
+
+    /// Разбор кадров сервера: данные — в поток VLESS, ping → pong, close → закрыть.
+    private func drainFrames() {
+        while true {
+            let b = [UInt8](wsBuffer.prefix(14))
+            guard b.count >= 2 else { return }
+            let opcode = b[0] & 0x0F
+            let masked = (b[1] & 0x80) != 0
+            var len = Int(b[1] & 0x7F)
+            var off = 2
+            if len == 126 { guard b.count >= 4 else { return }; len = Int(b[2]) << 8 | Int(b[3]); off = 4 }
+            else if len == 127 {
+                guard b.count >= 10 else { return }
+                len = 0; for i in 2..<10 { len = len << 8 | Int(b[i]) }; off = 10
+            }
+            if masked { off += 4 }
+            guard wsBuffer.count >= off + len else { return }
+            var payload = [UInt8](wsBuffer.dropFirst(off).prefix(len))
+            if masked {
+                let mk = [UInt8](wsBuffer.dropFirst(off - 4).prefix(4))
+                for i in 0..<payload.count { payload[i] ^= mk[i & 3] }
+            }
+            wsBuffer = Data(wsBuffer.dropFirst(off + len))
+            switch opcode {
+            case 0x8: close(); return
+            case 0x9: sendFrame(Data(payload), opcode: 0xA)
+            case 0xA: break
+            default: deliver(payload)
+            }
+        }
+    }
+
+    private func deliver(_ bytes: [UInt8]) {
+        var d = bytes[...]
+        if respSkip == -1 {
+            guard d.count >= 2 else { return }
+            respSkip = 2 + Int(d[d.startIndex + 1])
+        }
+        if respSkip > 0 {
+            let k = min(respSkip, d.count)
+            d = d.dropFirst(k)
+            respSkip -= k
+        }
+        guard !d.isEmpty else { return }
+        client.send(content: Data(d), completion: .contentProcessed { [weak self] e in if e != nil { self?.close() } })
     }
 }

@@ -12,10 +12,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler(NSError(domain: "HLTHVPN", code: 1, userInfo: [NSLocalizedDescriptionKey: "Нет ключа VLESS или он не поддерживается (нужен type=ws)"]))
             return
         }
-        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
+        // Адрес сервера — до включения туннеля и мимо него.
+        let ip = Self.resolveIPv4(cfg.host)
+        VlessSocksServer.serverIP = ip
+        guard let ip else {
+            completionHandler(NSError(domain: "HLTHVPN", code: 3, userInfo: [NSLocalizedDescriptionKey: "Не удалось найти адрес сервера \(cfg.host)"]))
+            return
+        }
+        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: ip)
         settings.mtu = 1500
         let ipv4 = NEIPv4Settings(addresses: ["198.18.0.1"], subnetMasks: ["255.255.255.0"])
         ipv4.includedRoutes = [NEIPv4Route.default()]
+        ipv4.excludedRoutes = [NEIPv4Route(destinationAddress: ip, subnetMask: "255.255.255.255")]
         settings.ipv4Settings = ipv4
         let dns = NEDNSSettings(servers: ["198.18.0.2"])
         dns.matchDomains = [""]
@@ -64,6 +72,20 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             completionHandler(nil)
         }
+    }
+
+    static func resolveIPv4(_ host: String) -> String? {
+        var hints = addrinfo()
+        hints.ai_family = AF_INET
+        hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &res) == 0, let first = res else { return nil }
+        defer { freeaddrinfo(res) }
+        guard let sa = first.pointee.ai_addr else { return nil }
+        var addr = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr }
+        var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+        guard inet_ntop(AF_INET, &addr, &buf, socklen_t(INET_ADDRSTRLEN)) != nil else { return nil }
+        return String(cString: buf)
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
