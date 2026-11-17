@@ -17,7 +17,11 @@ services:
       - ./xray.json:/etc/xray/config.json:ro
     expose:
       - "10000"
-    mem_limit: 192m
+    ports:
+      - "8443:8443"
+    ulimits:
+      nofile: { soft: 65535, hard: 65535 }
+    mem_limit: 256m
 
   caddy:
     image: caddy:2-alpine

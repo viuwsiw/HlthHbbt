@@ -36,5 +36,19 @@ func (s *Server) getVPN(w http.ResponseWriter, r *http.Request, u ctxUser) {
 	q.Set("host", domain)
 	q.Set("path", path)
 	key := "vless://" + uuid + "@" + domain + ":443?" + q.Encode() + "#" + url.PathEscape("HLTH VPN")
-	writeJSON(w, 200, map[string]any{"enabled": true, "key": key, "host": domain, "port": 443, "path": path})
+	resp := map[string]any{"enabled": true, "key": key, "host": domain, "port": 443, "path": path}
+	if pub := os.Getenv("REALITY_PUBLIC"); pub != "" {
+		sni := env("REALITY_SNI", "www.microsoft.com")
+		rq := url.Values{}
+		rq.Set("encryption", "none")
+		rq.Set("flow", "xtls-rprx-vision")
+		rq.Set("security", "reality")
+		rq.Set("sni", sni)
+		rq.Set("fp", "chrome")
+		rq.Set("pbk", pub)
+		rq.Set("sid", os.Getenv("REALITY_SID"))
+		rq.Set("type", "tcp")
+		resp["keyFast"] = "vless://" + uuid + "@" + domain + ":8443?" + rq.Encode() + "#" + url.PathEscape("HLTH Reality")
+	}
+	writeJSON(w, 200, resp)
 }
