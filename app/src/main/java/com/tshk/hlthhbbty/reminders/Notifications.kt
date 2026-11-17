@@ -20,6 +20,7 @@ object Notifications {
     const val CHANNEL_ACHIEVEMENTS = "achievements"
     const val CHANNEL_MESSAGES = "messages"
     const val CHANNEL_FOCUS = "focus_timer"
+    const val CHANNEL_CHAT = "chat"
     const val WATER_ID = 1
 
     fun createChannels(context: Context) {
@@ -30,6 +31,8 @@ object Notifications {
             NotificationChannel(CHANNEL_WATER, "Вода", NotificationManager.IMPORTANCE_DEFAULT)
                 .apply { description = "Напоминания попить воды" },
             NotificationChannel(CHANNEL_ACHIEVEMENTS, "Достижения", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL_CHAT, "Сообщения", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "Новые сообщения в мессенджере" },
             NotificationChannel(CHANNEL_FOCUS, "Таймер фокуса", NotificationManager.IMPORTANCE_LOW)
                 .apply { description = "Идущий таймер фокуса"; setShowBadge(false) },
             NotificationChannel(CHANNEL_MESSAGES, "Сообщения приложения", NotificationManager.IMPORTANCE_HIGH)
@@ -94,6 +97,29 @@ object Notifications {
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(5000 + id, n)
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    fun showChat(context: Context, peer: String, text: String) {
+        if (!canPost(context)) return
+        val open = PendingIntent.getActivity(
+            context, peer.hashCode(),
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(MainActivity.EXTRA_WIDGET_ROUTE, "chat:$peer")
+                .setData(android.net.Uri.parse("hlthhbbty://chat/$peer")),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = NotificationCompat.Builder(context, CHANNEL_CHAT)
+            .setSmallIcon(R.drawable.ic_stat_logo)
+            .setContentTitle("@$peer")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(7000 + (peer.hashCode() and 0xFFF), n)
     }
 
     fun cancel(context: Context, id: Int) = NotificationManagerCompat.from(context).cancel(id)

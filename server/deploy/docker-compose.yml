@@ -1,0 +1,29 @@
+services:
+  api:
+    build: ..
+    restart: unless-stopped
+    volumes:
+      - hlth-data:/data
+    expose:
+      - "8080"
+    mem_limit: 256m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 128m
+
+volumes:
+  hlth-data:
+  caddy-data:
+  caddy-config:

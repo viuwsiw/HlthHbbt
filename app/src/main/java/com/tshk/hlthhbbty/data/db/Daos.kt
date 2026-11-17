@@ -128,6 +128,39 @@ interface WalkDao {
 }
 
 @Dao
+interface ChatDao {
+    @Upsert
+    suspend fun upsert(message: ChatMessageEntity)
+
+    @Query("SELECT * FROM chat_messages WHERE owner = :owner AND peer = :peer ORDER BY createdAt")
+    fun observeChat(owner: String, peer: String): Flow<List<ChatMessageEntity>>
+
+    @Query(
+        """
+        SELECT peer, text AS lastText, createdAt AS lastAt, outgoing AS lastOutgoing, serverId AS maxServerId
+        FROM chat_messages c WHERE owner = :owner AND createdAt = (
+            SELECT MAX(createdAt) FROM chat_messages WHERE owner = :owner AND peer = c.peer)
+        GROUP BY peer ORDER BY lastAt DESC
+        """
+    )
+    fun observeConversations(owner: String): Flow<List<ConversationRow>>
+
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE owner = :owner AND peer = :peer AND outgoing = 0 AND serverId > :afterId")
+    fun observeUnread(owner: String, peer: String, afterId: Long): Flow<Int>
+
+    @Query("SELECT peer, COUNT(*) AS n FROM chat_messages WHERE owner = :owner AND outgoing = 0 AND serverId > 0 GROUP BY peer")
+    suspend fun incomingCounts(owner: String): List<PeerCount>
+
+    @Query("SELECT * FROM chat_messages WHERE owner = :owner AND outgoing = 0 AND serverId > :afterId ORDER BY serverId")
+    suspend fun incomingAfter(owner: String, afterId: Long): List<ChatMessageEntity>
+
+    @Query("DELETE FROM chat_messages WHERE owner = :owner")
+    suspend fun deleteAll(owner: String)
+}
+
+data class PeerCount(val peer: String, val n: Int)
+
+@Dao
 interface NoteDao {
     @Upsert
     suspend fun upsert(note: DayNoteEntity)

@@ -185,4 +185,28 @@ data class WalkPointEntity(
     val time: Long,
 )
 
+/** Расшифрованное сообщение мессенджера (хранится только на этом устройстве). */
+@Entity(tableName = "chat_messages", indices = [Index(value = ["owner", "peer", "serverId"])])
+data class ChatMessageEntity(
+    @PrimaryKey val clientId: String,
+    /** Логин владельца на этом устройстве (на устройстве может быть несколько аккаунтов). */
+    val owner: String,
+    val peer: String,
+    val outgoing: Boolean,
+    val text: String,
+    val createdAt: Long,
+    /** 0 — ещё не доставлено на сервер. */
+    val serverId: Long = 0,
+    /** false — не удалось расшифровать. */
+    val readable: Boolean = true,
+)
+
+data class ConversationRow(
+    val peer: String,
+    val lastText: String,
+    val lastAt: Long,
+    val lastOutgoing: Boolean,
+    val maxServerId: Long,
+)
+
 data class DayTotal(val epochDay: Long, val total: Int)

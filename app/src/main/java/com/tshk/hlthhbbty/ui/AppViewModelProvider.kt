@@ -34,6 +34,10 @@ object AppViewModelProvider {
         initializer { FocusViewModel(container(), createSavedStateHandle()) }
         initializer { AchievementsViewModel(container()) }
         initializer { SettingsViewModel(container()) }
+        initializer { com.tshk.hlthhbbty.ui.messenger.ChatsViewModel(container()) }
+        initializer { com.tshk.hlthhbbty.ui.messenger.ChatViewModel(container(), createSavedStateHandle()) }
+        initializer { com.tshk.hlthhbbty.ui.messenger.UserProfileViewModel(container(), createSavedStateHandle()) }
+        initializer { com.tshk.hlthhbbty.ui.messenger.PrivacyViewModel(container()) }
         initializer { com.tshk.hlthhbbty.ui.walk.WalkViewModel(container(), createSavedStateHandle()) }
         initializer { com.tshk.hlthhbbty.ui.integrations.SpotifyViewModel(container(), createSavedStateHandle()) }
     }

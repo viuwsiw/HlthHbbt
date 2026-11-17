@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Settings
@@ -75,6 +76,7 @@ fun ProfileScreen(
     onAchievements: () -> Unit,
     onSettings: () -> Unit,
     onStats: () -> Unit,
+    onPrivacy: () -> Unit,
     vm: ProfileViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -127,6 +129,8 @@ fun ProfileScreen(
                 MenuRow(Icons.Rounded.EmojiEvents, "Достижения · ${s.achievementsUnlocked}/${s.achievementsTotal}", onClick = onAchievements)
                 MenuDivider()
                 MenuRow(Icons.Rounded.Extension, "Интеграции", onClick = onIntegrations)
+                MenuDivider()
+                MenuRow(Icons.Rounded.Shield, "Конфиденциальность", onClick = onPrivacy)
                 MenuDivider()
                 MenuRow(Icons.Rounded.Settings, "Настройки", onClick = onSettings)
             }

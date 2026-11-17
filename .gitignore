@@ -13,3 +13,5 @@ build/
 *.keystore
 !app/debug.keystore
 *.jks
+server/deploy/.env
+server/data/

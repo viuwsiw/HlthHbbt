@@ -63,6 +63,7 @@ class ProfileViewModel(private val c: AppContainer) : ViewModel() {
     fun deleteAccount() = viewModelScope.launch {
         val id = userId.first()
         c.users.deleteUserFiles(state.value.user)
+        c.messenger.deleteRemoteAccount()
         c.auth.deleteAccount(id)
     }
 }

@@ -13,10 +13,11 @@ android {
         applicationId = "com.tshk.hlth_hbbty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "1.0.3"
+        versionCode = 29
+        versionName = "1.1-beta.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+        buildConfigField("String", "MESSENGER_URL", "\"${project.findProperty("messenger.url") ?: ""}\"")
         buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${project.findProperty("spotify.clientId") ?: ""}\"")
         manifestPlaceholders["redirectScheme"] = "hlthhbbty"
     }
@@ -99,6 +100,8 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.coil.compose)
     implementation(libs.osmdroid)
+    implementation(libs.okhttp)
+    implementation(libs.tink.android)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.health.connect)

@@ -5,3 +5,13 @@
 -dontwarn org.slf4j.**
 -keep class org.osmdroid.** { *; }
 -dontwarn org.osmdroid.**
+
+# Tink (E2E-шифрование) и OkHttp
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

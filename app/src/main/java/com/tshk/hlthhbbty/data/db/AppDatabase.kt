@@ -11,8 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         UserEntity::class, HabitEntity::class, HabitCheckEntity::class, WaterLogEntity::class,
         FreezeEntity::class, DayNoteEntity::class, WalkEntity::class, WalkPointEntity::class,
+        ChatMessageEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun waterDao(): WaterDao
     abstract fun noteDao(): NoteDao
     abstract fun walkDao(): WalkDao
+    abstract fun chatDao(): ChatDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -60,9 +62,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `chat_messages` (`clientId` TEXT NOT NULL, `owner` TEXT NOT NULL, `peer` TEXT NOT NULL, " +
+                        "`outgoing` INTEGER NOT NULL, `text` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `serverId` INTEGER NOT NULL, " +
+                        "`readable` INTEGER NOT NULL, PRIMARY KEY(`clientId`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_messages_owner_peer_serverId` ON `chat_messages` (`owner`, `peer`, `serverId`)")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "hlth_hbbty.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

@@ -63,12 +63,26 @@ class AppContainer(private val context: Context) {
     val walkOpenRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** Экран, который просит открыть виджет: focus / walk / habits. */
     val widgetRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val messenger = com.tshk.hlthhbbty.messenger.MessengerRepository(
+        context, scope, db.chatDao(),
+        localUser = { auth.currentUserId.first()?.let { db.userDao().findById(it) } },
+        history = { history.once(it) },
+    )
     val onboarding = com.tshk.hlthhbbty.onboarding.OnboardingStore(context)
     val focusTimer = com.tshk.hlthhbbty.focus.FocusTimer(context)
     val media = com.tshk.hlthhbbty.media.MediaRepository(context)
     val spotify = com.tshk.hlthhbbty.spotify.SpotifyRepository(context, scope)
 
+    private var profilePush: kotlinx.coroutines.Job? = null
+
     fun start() {
+        // Мессенджер: подключение при входе/регистрации, запуск, уведомления, фоновая синхронизация.
+        auth.onAuthenticated = { u, p, n -> messenger.linkQuietly(u, p, n) }
+        messenger.start()
+        com.tshk.hlthhbbty.messenger.MessengerSyncWorker.schedule(context)
+        scope.launch {
+            messenger.incoming.collect { ev -> if (ev != null) Notifications.showChat(context, ev.peer, ev.text) }
+        }
         com.tshk.hlthhbbty.update.UpdateCheckWorker.schedule(context)
         bedtime.schedule()
         scope.launch {
@@ -104,6 +118,7 @@ class AppContainer(private val context: Context) {
         // Вход/выход: перепланировать или снять все напоминания.
         scope.launch {
             auth.currentUserId.distinctUntilChanged().collect { id ->
+                if (id == null && messenger.store.account.value != null) messenger.unlink()
                 if (id == null) reminders.cancelAll()
                 else reminders.rescheduleAll(habits.activeOnce(id), settings.current())
                 HabitsWidget.refresh(context)
@@ -126,6 +141,12 @@ class AppContainer(private val context: Context) {
         scope.launch {
             HabitsWidget.refresh(context)
             checkAchievements()
+        }
+        // Профиль в мессенджере — не чаще раза в 20 секунд.
+        profilePush?.cancel()
+        profilePush = scope.launch {
+            kotlinx.coroutines.delay(20_000)
+            runCatching { messenger.pushProfile() }
         }
     }
 

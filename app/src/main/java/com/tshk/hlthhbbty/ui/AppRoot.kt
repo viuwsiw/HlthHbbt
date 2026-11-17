@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.rounded.BarChart
@@ -107,6 +109,12 @@ private object Routes {
     const val HABITS = "habits"
     const val STATS = "stats"
     const val PROFILE = "profile"
+    const val CHATS = "chats"
+    const val CHAT = "chat/{peer}"
+    const val USER = "user/{username}"
+    const val PRIVACY = "privacy"
+    fun chat(peer: String) = "chat/$peer"
+    fun user(username: String) = "user/$username"
     const val EDIT_PROFILE = "profile/edit"
     const val CHANGE_PASSWORD = "profile/password"
     const val INTEGRATIONS = "integrations"
@@ -122,11 +130,12 @@ private object Routes {
     fun focus(id: Long) = "focus/$id"
 }
 
-private val tabs = listOf(Routes.HOME, Routes.HABITS, Routes.PROFILE)
+private val tabs = listOf(Routes.HOME, Routes.HABITS, Routes.CHATS, Routes.PROFILE)
 
 private val navItems = listOf(
     NavItem("Главная", Icons.Outlined.Home, Icons.Rounded.Home),
     NavItem("Привычки", Icons.Outlined.TaskAlt, Icons.Rounded.TaskAlt),
+    NavItem("Чаты", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Rounded.Chat),
     NavItem("Профиль", Icons.Outlined.Person, Icons.Rounded.Person),
 )
 
@@ -160,6 +169,10 @@ private fun MainScaffold() {
         appContainer.widgetRoute.value = null
         val userId = appContainer.auth.currentUserId.first() ?: return@LaunchedEffect
         val habits = appContainer.habits.activeOnce(userId)
+        if (r.startsWith("chat:")) {
+            nav.navigate(Routes.chat(r.removePrefix("chat:"))) { launchSingleTop = true }
+            return@LaunchedEffect
+        }
         when (r) {
             "habits" -> nav.switchTab(Routes.HABITS)
             "walk" -> nav.navigate(Routes.walk(habits.firstOrNull { it.activity != null }?.id)) { launchSingleTop = true }
@@ -285,6 +298,22 @@ private fun MainScaffold() {
                     onWalk = { nav.navigate(Routes.walk(it.id)) },
                 )
             }
+            composable(Routes.CHATS) {
+                com.tshk.hlthhbbty.ui.messenger.ChatsScreen(
+                    tabPadding,
+                    onOpenChat = { nav.navigate(Routes.chat(it)) },
+                    onOpenUser = { nav.navigate(Routes.user(it)) },
+                )
+            }
+            composable(Routes.CHAT, arguments = listOf(navArgument("peer") { type = NavType.StringType })) {
+                com.tshk.hlthhbbty.ui.messenger.ChatScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate(Routes.user(it)) })
+            }
+            composable(Routes.USER, arguments = listOf(navArgument("username") { type = NavType.StringType })) {
+                com.tshk.hlthhbbty.ui.messenger.UserProfileScreen(onBack = { nav.popBackStack() }, onMessage = { nav.navigate(Routes.chat(it)) })
+            }
+            composable(Routes.PRIVACY) {
+                com.tshk.hlthhbbty.ui.messenger.PrivacyScreen(onBack = { nav.popBackStack() }, onPreview = { nav.navigate(Routes.user(it)) })
+            }
             composable(Routes.STATS) { StatsScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.PROFILE) {
                 ProfileScreen(
@@ -295,6 +324,7 @@ private fun MainScaffold() {
                     onAchievements = { nav.navigate(Routes.ACHIEVEMENTS) },
                     onSettings = { nav.navigate(Routes.SETTINGS) },
                     onStats = { nav.navigate(Routes.STATS) },
+                    onPrivacy = { nav.navigate(Routes.PRIVACY) },
                 )
             }
             composable(Routes.EDIT_PROFILE) { EditProfileScreen(onboarding = false, onDone = { nav.popBackStack() }) }

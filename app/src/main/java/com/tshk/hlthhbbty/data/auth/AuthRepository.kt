@@ -19,6 +19,9 @@ class AuthRepository(
 ) {
     val currentUserId: Flow<Long?> = session.currentUserId
 
+    /** Вызывается после успешного входа/регистрации — для подключения мессенджера (пароль известен только здесь). */
+    var onAuthenticated: ((username: String, password: String, displayName: String) -> Unit)? = null
+
     suspend fun register(username: String, password: String, displayName: String): AuthResult =
         withContext(Dispatchers.Default) {
             val login = username.trim().lowercase()
@@ -40,6 +43,7 @@ class AuthRepository(
             )
             habits.seedDefaults(id)
             session.set(id)
+            onAuthenticated?.invoke(login, password, name)
             AuthResult.Success(id)
         }
 
@@ -51,6 +55,7 @@ class AuthRepository(
                 return@withContext AuthResult.Error("Неверный логин или пароль")
             }
             session.set(user.id)
+            onAuthenticated?.invoke(user.username, password, user.displayName)
             AuthResult.Success(user.id)
         }
 
