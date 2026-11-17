@@ -264,6 +264,7 @@ final class AppModel: ObservableObject {
     func saveNote(_ day: EpochDay, mood: Int, text: String) {
         data.notes.removeAll { $0.day == day }
         data.notes.append(DayNote(day: day, mood: mood, note: text))
+        if day == Days.today { Task { await Health.shared.saveMood(mood) } }
     }
 
     /// Автоотметка привычек по данным «Здоровья».

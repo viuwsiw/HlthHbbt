@@ -24,15 +24,16 @@
 		</dict>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
-	<array><string>spotify</string></array>
+	<array><string>spotify</string><string>shortcuts</string></array>
 	<key>NSHealthShareUsageDescription</key><string>Шаги и сон из «Здоровья» — для автоотметки привычек и карточек на главной.</string>
-	<key>NSHealthUpdateUsageDescription</key><string>Приложение не записывает данные в «Здоровье».</string>
+	<key>NSHealthUpdateUsageDescription</key><string>Записываем настроение в «Состояние духа» — оно общее с «Дневником».</string>
 	<key>NSMotionUsageDescription</key><string>Шаги за день и во время прогулки.</string>
 	<key>NSLocationWhenInUseUsageDescription</key><string>Маршрут прогулки на карте.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Запись маршрута прогулки, когда экран выключен.</string>
 	<key>NSPhotoLibraryUsageDescription</key><string>Фото профиля и вложения в мессенджере.</string>
 	<key>NSCameraUsageDescription</key><string>Фото профиля.</string>
 	<key>NSAppleMusicUsageDescription</key><string>Показывать собеседникам, что у вас играет в «Музыке».</string>
+	<key>NSSupportsLiveActivities</key><true/>
 	<key>UIBackgroundModes</key>
 	<array><string>location</string></array>
 </dict>

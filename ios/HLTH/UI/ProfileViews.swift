@@ -261,6 +261,7 @@ struct SettingsView: View {
     @State private var checking = false
     @State private var updateText: String?
     @State private var confirmDelete = false
+    @AppStorage("mood_to_health") private var moodToHealth = false
 
     var body: some View {
         Screen(title: "Настройки", large: false) {
@@ -304,6 +305,13 @@ struct SettingsView: View {
                 Reminders.shared.reschedule(app.data.habits, settings: s)
             }
 
+            SectionTitle("Здоровье")
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Настроение → «Здоровье» и «Дневник»", isOn: $moodToHealth).foregroundStyle(p.text).tint(p.accent)
+                Text("Записи настроения сохраняются в «Состояние духа» (iOS 18+) — их видят «Здоровье» и приложение «Дневник».")
+                    .font(.caption).foregroundStyle(p.text2)
+            }.glassCard()
+
             SectionTitle("Данные")
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -343,6 +351,8 @@ struct SettingsView: View {
                 }
                 if let updateText { Text(updateText).font(.caption).foregroundStyle(p.text2) }
             }.glassCard()
+
+            SigningSection()
 
             SectionTitle("Опасная зона")
             GlassButton(title: "Удалить аккаунт", systemImage: "trash", role: .destructive) { confirmDelete = true }

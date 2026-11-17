@@ -7,14 +7,16 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.1.1"
-    CURRENT_PROJECT_VERSION: "34"
+    MARKETING_VERSION: "1.1.2"
+    CURRENT_PROJECT_VERSION: "35"
     DEVELOPMENT_TEAM: ""
 targets:
   HLTH:
     type: application
     platform: iOS
-    sources: [HLTH]
+    sources: [HLTH, Shared]
+    dependencies:
+      - target: HLTHWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tshk.hlthhbbty
@@ -23,4 +25,16 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_ENTITLEMENTS: HLTH/HLTH.entitlements
+        ENABLE_PREVIEWS: NO
+  HLTHWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [HLTHWidgets, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tshk.hlthhbbty.widgets
+        PRODUCT_NAME: HLTHWidgets
+        INFOPLIST_FILE: HLTHWidgets/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
         ENABLE_PREVIEWS: NO

@@ -7,6 +7,7 @@ struct FocusView: View {
     let habit: Habit?
     var minutes: Int = 25
     @State private var chosen = 25
+    @State private var showDndHelp = false
 
     init(habit: Habit?, minutes: Int = 25) {
         self.habit = habit
@@ -47,11 +48,30 @@ struct FocusView: View {
                         GlassButton(title: "Стоп", systemImage: "stop.fill", role: .destructive) { timer.cancel() }
                     }
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(isOn: $timer.dnd) {
+                        Label("Не беспокоить на время фокуса", systemImage: "moon.fill")
+                    }
+                    .tint(p.accent)
+                    .disabled(timer.active)
+                    Text("Статус в мессенджере станет «Не беспокоить», а быстрая команда «HLTH Фокус» включит режим фокусировки iPhone.")
+                        .font(.caption).foregroundStyle(p.text2)
+                    Button("Как настроить быструю команду") { showDndHelp = true }
+                        .font(.caption.weight(.semibold)).foregroundStyle(p.accent)
+                }
+                .foregroundStyle(p.text)
+                .glassCard()
                 MusicCard()
-                Text("Таймер продолжит идти, даже если закрыть приложение, — по окончании придёт уведомление.")
+                Text("Таймер виден на экране блокировки и в Dynamic Island и идёт, даже если закрыть приложение.")
                     .font(.caption).foregroundStyle(p.text2).multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
+        }
+        .alert("Быстрая команда «HLTH Фокус»", isPresented: $showDndHelp) {
+            Button("Открыть «Команды»") { if let u = URL(string: "shortcuts://create-shortcut") { UIApplication.shared.open(u) } }
+            Button("Готово", role: .cancel) {}
+        } message: {
+            Text("iOS не разрешает приложениям включать «Не беспокоить» самостоятельно. Создайте один раз команду с названием «HLTH Фокус»:\n\n1. Действие «Настроить фокусирование» → «Не беспокоить» → «Включить».\n2. «До» → «Время» и укажите «Ввод быстрой команды» минут (или «Выключить» по окончании).\n\nДальше приложение будет запускать её само при старте фокуса.")
         }
     }
 }
@@ -61,44 +81,71 @@ struct WalkView: View {
     @Environment(\.palette) private var p
     let habit: Habit?
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
+    @State private var centered = false
     @State private var now = Date()
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Map(position: $camera) {
-                UserAnnotation()
-                if walk.points.count > 1 {
-                    MapPolyline(coordinates: walk.points).stroke(p.accent, lineWidth: 6)
+        Map(position: $camera) {
+            UserAnnotation()
+            if walk.points.count > 1 {
+                MapPolyline(coordinates: walk.points).stroke(p.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+            }
+            if let first = walk.points.first {
+                Annotation("Старт", coordinate: first) {
+                    Circle().fill(p.accent).frame(width: 14, height: 14).overlay(Circle().stroke(.white, lineWidth: 3))
                 }
             }
-            .mapControls { MapUserLocationButton(); MapCompass() }
-            .ignoresSafeArea(edges: .top)
-
-            VStack(spacing: 14) {
-                HStack(spacing: 10) {
-                    cell(walk.running ? timeString(now.timeIntervalSince(walk.startedAt ?? now)) : "00:00", "время")
-                    cell(String(format: "%.2f", walk.distance / 1000), "км")
-                    cell("\(walk.steps)", "шагов")
-                }
-                if walk.running {
-                    HStack(spacing: 10) {
-                        GlassButton(title: "Завершить", systemImage: "flag.checkered", prominent: true) { walk.stop(save: true) }
-                        GlassButton(title: "Отмена", systemImage: "xmark", role: .destructive) { walk.stop(save: false) }
-                    }
-                } else {
-                    GlassButton(title: "Начать прогулку", systemImage: "figure.walk", prominent: true) { walk.start(habit: habit?.id) }
-                }
-            }
-            .padding(16)
-            .glass(30)
-            .padding(.horizontal, 12).padding(.bottom, 8)
         }
+        .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
+        .mapControls {
+            MapUserLocationButton()
+            MapCompass()
+            MapScaleView()
+        }
+        .safeAreaInset(edge: .bottom) { panel }
         .navigationTitle(habit?.title ?? "Прогулка")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { walk.prepare() }
+        .onAppear { walk.prepare(); if walk.current != nil { centerOnUser() } }
+        .onChange(of: walk.fixCount) { _, _ in
+            if !centered { centerOnUser() }
+        }
         .onReceive(tick) { now = $0 }
+    }
+
+    private func centerOnUser() {
+        guard let c = walk.current else { return }
+        centered = true
+        withAnimation(.easeInOut(duration: 0.6)) {
+            camera = .region(MKCoordinateRegion(center: c, latitudinalMeters: 700, longitudinalMeters: 700))
+        }
+        // Дальше камера следует за пользователем.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            camera = .userLocation(followsHeading: false, fallback: .region(MKCoordinateRegion(center: c, latitudinalMeters: 700, longitudinalMeters: 700)))
+        }
+    }
+
+    private var panel: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                cell(walk.running ? timeString(now.timeIntervalSince(walk.startedAt ?? now)) : "00:00", "время")
+                cell(String(format: "%.2f", walk.distance / 1000), "км")
+                cell("\(walk.steps)", "шагов")
+            }
+            if walk.running {
+                HStack(spacing: 10) {
+                    GlassButton(title: "Завершить", systemImage: "flag.checkered", prominent: true) { walk.stop(save: true) }
+                    GlassButton(title: "Отмена", systemImage: "xmark", role: .destructive) { walk.stop(save: false) }
+                }
+            } else {
+                GlassButton(title: "Начать прогулку", systemImage: "figure.walk", prominent: true) { walk.start(habit: habit?.id); centerOnUser() }
+            }
+        }
+        .padding(16)
+        .glass(30)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 
     private func cell(_ v: String, _ t: String) -> some View {

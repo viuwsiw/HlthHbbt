@@ -57,6 +57,7 @@ jobs:
         run: |
           cd ios
           APP=build/Build/Products/Release-iphoneos/HLTH.app
+          for EXT in "$APP"/PlugIns/*.appex; do [ -d "$EXT" ] && codesign --force --sign - "$EXT"; done
           codesign --force --sign - --entitlements HLTH/HLTH.entitlements "$APP" || true
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           NAME="HLTH-HBTy-${VERSION}-ios.ipa"

@@ -56,10 +56,16 @@ struct MainView: View {
         .modifier(TabBarMinimize())
         .sheet(isPresented: $showAdmin) { NavigationStack { AdminView() }.glassSheet() }
         .alert("Доступна версия \(update?.version ?? "")", isPresented: Binding(get: { update != nil }, set: { if !$0 { update = nil } })) {
-            Button("Скачать") { if let u = update, let url = URL(string: u.url) { UIApplication.shared.open(url) }; update = nil }
+            Button("Подписать и установить") {
+                if let u = update {
+                    Task { do { try await Updates.signAndInstall(u) } catch { app.show(error.localizedDescription) } }
+                }
+                update = nil
+            }
+            Button("Скачать IPA") { if let u = update, let url = URL(string: u.url) { UIApplication.shared.open(url) }; update = nil }
             Button("Позже", role: .cancel) { update = nil }
         } message: {
-            Text((update?.changelog ?? "") + "\n\nУстановите новый IPA так же, как текущий (AltStore / Sideloadly).")
+            Text((update?.changelog ?? "") + "\n\n«Подписать и установить» — если в Настройках загружены сертификаты. Иначе скачайте IPA и поставьте через Sideloadly/AltStore.")
         }
         .task {
             NowPlaying.shared.start()
@@ -101,7 +107,7 @@ struct Screen<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) { content() }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
         .background(LiquidBackground(animated: app.settings.animatedBackground))

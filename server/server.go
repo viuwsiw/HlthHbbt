@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -9,8 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -88,6 +89,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /v1/messages", s.auth(s.sendMessage))
 	mux.HandleFunc("GET /v1/messages", s.auth(s.listMessages))
 	mux.HandleFunc("GET /v1/ws", s.ws)
+	mux.HandleFunc("GET /v1/me/signing", s.auth(s.getSigning))
+	mux.HandleFunc("PUT /v1/me/signing", s.auth(s.putSigning))
+	mux.HandleFunc("DELETE /v1/me/signing", s.auth(s.deleteSigning))
+	mux.HandleFunc("POST /v1/me/sign", s.auth(s.signIPA))
+	mux.HandleFunc("GET /v1/ota/{token}/{file}", s.ota)
 	return withLimits(mux)
 }
 
@@ -355,6 +361,7 @@ func (s *Server) putKey(w http.ResponseWriter, r *http.Request, u ctxUser) {
 
 func (s *Server) deleteMe(w http.ResponseWriter, r *http.Request, u ctxUser) {
 	_, _ = s.db.Exec(`DELETE FROM users WHERE id=?`, u.ID)
+	_ = os.RemoveAll(s.signDir(u.ID))
 	s.hub.closeUser(u.ID)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
@@ -514,12 +521,12 @@ type msgReq struct {
 }
 
 type message struct {
-	ID          int64  `json:"id"`
-	From        string `json:"from"`
-	To          string `json:"to"`
-	Ciphertext  string `json:"ciphertext"` // тот вариант, который может расшифровать запрашивающий
-	ClientID    string `json:"clientId"`
-	CreatedAt   int64  `json:"createdAt"`
+	ID         int64  `json:"id"`
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Ciphertext string `json:"ciphertext"` // тот вариант, который может расшифровать запрашивающий
+	ClientID   string `json:"clientId"`
+	CreatedAt  int64  `json:"createdAt"`
 }
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, u ctxUser) {
@@ -630,7 +637,6 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 func fail(w http.ResponseWriter, code int, errCode, msg string) {
 	writeJSON(w, code, map[string]any{"error": errCode, "message": msg})
 }
-
 
 // ---------- статусы ----------
 

@@ -37,6 +37,23 @@ final class Health: ObservableObject {
         AppModel.shared.applyHealth(steps: steps, sleepMinutes: sleepMinutes)
     }
 
+    /// Настроение → «Здоровье» (Состояние духа, iOS 18+). Эти данные общие с приложением «Дневник».
+    func saveMood(_ mood: Int) async {
+        guard UserDefaults.standard.bool(forKey: "mood_to_health"), (1...5).contains(mood), HKHealthStore.isHealthDataAvailable() else { return }
+        if #available(iOS 18.0, *) {
+            let type = HKSampleType.stateOfMindType()
+            try? await store.requestAuthorization(toShare: [type], read: [type])
+            let labels: [[HKStateOfMind.Label]] = [[.sad], [.discouraged], [.indifferent], [.content], [.happy]]
+            let sample = HKStateOfMind(date: Date(), kind: .dailyMood, valence: Double(mood - 3) / 2,
+                                       labels: labels[mood - 1], associations: [.selfCare])
+            do {
+                try await store.save(sample)
+            } catch {
+                AppModel.shared.show("Не удалось записать настроение в «Здоровье»")
+            }
+        }
+    }
+
     private func healthSteps(since start: Date) async -> Int? {
         guard HKHealthStore.isHealthDataAvailable() else { return nil }
         return await withCheckedContinuation { cont in
@@ -158,6 +175,27 @@ enum Updates {
 
     static var currentBuild: Int { Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0 }
     static var currentVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?" }
+
+    /// Последняя версия на GitHub (даже если не новее установленной).
+    static func latest() async -> IosUpdate? {
+        guard let url = URL(string: "https://api.github.com/repos/\(repo)/contents/update-ios.json?ref=\(branch)") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("application/vnd.github.raw+json", forHTTPHeaderField: "Accept")
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let j = (try? JSONSerialization.jsonObject(with: data)) as? JSON,
+              let build = j["build"] as? Int else { return nil }
+        return IosUpdate(version: j["versionName"] as? String ?? "", build: build, url: j["ipaUrl"] as? String ?? "", changelog: j["changelog"] as? String ?? "")
+    }
+
+    /// Подписать IPA обновления своим сертификатом на сервере и установить «по воздуху».
+    @MainActor
+    static func signAndInstall(_ u: IosUpdate) async throws {
+        let bundle = Bundle.main.bundleIdentifier ?? "com.tshk.hlthhbbty"
+        let r = try await AppModel.shared.api.sign(ipaUrl: u.url, bundleId: bundle, version: u.version)
+        guard let s = r["installUrl"] as? String, let url = URL(string: s) else { throw ApiError(code: 0, error: "sign", message: "Сервер не вернул ссылку установки") }
+        await UIApplication.shared.open(url)
+    }
 
     static func check() async -> IosUpdate? {
         guard let url = URL(string: "https://api.github.com/repos/\(repo)/contents/update-ios.json?ref=\(branch)") else { return nil }

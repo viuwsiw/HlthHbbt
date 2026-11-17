@@ -213,6 +213,28 @@ final class Api {
         return data
     }
 
+    // MARK: подпись обновлений
+    func signingInfo() async throws -> JSON { try await call("GET", "/me/signing") }
+    func uploadSigning(p12: Data, password: String, provision: Data) async throws -> JSON {
+        try await call("PUT", "/me/signing", ["p12": p12.base64EncodedString(), "password": password, "provision": provision.base64EncodedString()])
+    }
+    func deleteSigning() async throws { try await call("DELETE", "/me/signing") }
+    func sign(ipaUrl: String, bundleId: String, version: String) async throws -> JSON {
+        var req = URLRequest(url: url("/me/sign"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 300
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["ipaUrl": ipaUrl, "bundleId": bundleId, "version": version, "title": "HLTH HBTy"])
+        let (data, resp) = try await session.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? JSON ?? [:]
+        guard (200..<300).contains(code) else {
+            throw ApiError(code: code, error: obj["error"] as? String ?? "", message: obj["message"] as? String ?? "Ошибка подписи (\(code))")
+        }
+        return obj
+    }
+
     // MARK: admin
     func adminStats() async throws -> JSON { try await call("GET", "/admin/stats") }
     func adminLogs(_ n: Int = 200) async throws -> [String] { try await call("GET", "/admin/logs?n=\(n)")["lines"] as? [String] ?? [] }
