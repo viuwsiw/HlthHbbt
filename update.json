@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
-  "versionName": "1.0.2.3",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/a89be27f5c7b1c779d4fd7e87ee8104bd44c0db5/dist/HLTH-HBTy-26.apk",
+  "versionCode": 27,
+  "versionName": "1.0.2.4",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/fd3395e9d84e07cca767cc21ef2282caa874afaa/dist/HLTH-HBTy-27.apk",
   "size": 3678313,
-  "changelog": "• Новый виджет «Быстрые действия»: вода, фокус, прогулка, привычки\n• Виджет «Привычки» в новом стиле\n• Виджеты — полупрозрачное стекло поверх обоев в тонах вашей темы"
+  "changelog": "• Свайпы между разделами — с любого места экрана и от короткого движения\n• Страница едет за пальцем, разделы выезжают сбоку\n• Плавное каскадное появление карточек\n• Анимация воды"
 }
