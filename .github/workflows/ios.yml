@@ -1,0 +1,79 @@
+name: iOS IPA
+
+on:
+  push:
+    branches: [claude/quirky-goodall-is99zk]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-ipa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$X" ]; then X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build
+        run: |
+          cd ios
+          VERSION=$(grep MARKETING_VERSION project.yml | head -1 | sed 's/.*: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          set +e
+          xcodebuild -project HLTH.xcodeproj -scheme HLTH -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1
+          STATUS=$?
+          set -e
+          if [ $STATUS -ne 0 ]; then
+            echo "::group::errors"
+            grep -E "error:|error -|BUILD FAILED" build.log | sort -u | head -150
+            echo "::endgroup::"
+            tail -40 build.log
+            exit 1
+          fi
+          tail -5 build.log
+
+      - name: Package IPA
+        run: |
+          cd ios
+          APP=build/Build/Products/Release-iphoneos/HLTH.app
+          codesign --force --sign - --entitlements HLTH/HLTH.entitlements "$APP" || true
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          NAME="HLTH-HBTy-${VERSION}-ios.ipa"
+          zip -qry "$NAME" Payload
+          ls -la "$NAME"
+          echo "IPA=$NAME" >> "$GITHUB_ENV"
+
+      - name: Commit IPA to branch
+        run: |
+          mkdir -p dist/ios
+          rm -f dist/ios/*.ipa
+          mv "ios/$IPA" dist/ios/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f dist/ios
+          git commit -m "dist: iOS IPA ${VERSION} (${GITHUB_SHA::7})"
+          for i in 1 2 3 4; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+            sleep $((i*5))
+          done
