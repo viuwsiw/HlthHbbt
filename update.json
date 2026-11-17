@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "1.0.3",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/afa3483b334eeff56602a7d8a11317bab76fb084/dist/HLTH-HBTy-28.apk",
-  "size": 3696796,
-  "changelog": "• Обучение при первом входе: свайпы, панель, плеер\n• Бета-канал обновлений в Настройках\n• Новые виджеты: свои иконки и кольцо прогресса\n• Настройки и профиль стали проще"
+  "versionCode": 33,
+  "versionName": "1.1",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/0f7d97ce64c1d2cd349a5ef1d3c0130c6e3d97bb/dist/HLTH-HBTy-33.apk",
+  "size": 4471320,
+  "changelog": "HLTH HBTy 1.1 🎉\n• Аккаунты на сервере и облачная копия со сквозным шифрованием\n• Мессенджер: «Избранное», медиа, статусы, что играет у собеседника\n• «О себе» в профиле\n• Антиспам"
 }
