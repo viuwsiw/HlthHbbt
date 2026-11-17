@@ -1,7 +1,7 @@
 {
-  "versionCode": 31,
-  "versionName": "1.1-beta.3",
-  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/a180471a42ae2a513d16f623fc8588bbd092acfe/dist/HLTH-HBTy-31.apk",
-  "size": 4405700,
-  "changelog": "Бета 1.1 (3)\n• Вкладка «Мессенджер»\n• Статусы: «В сети», «Не беспокоить», автоматический «Вне чата»"
+  "versionCode": 32,
+  "versionName": "1.1-beta.4",
+  "apkUrl": "https://raw.githubusercontent.com/viuwsiw/HlthHbbt/e84cf13842bc7abe16bbe03e64365da1f4f74c33/dist/HLTH-HBTy-32.apk",
+  "size": 4438552,
+  "changelog": "Бета 1.1 (4)\n• Аккаунты на сервере, перенос существующих — автоматически\n• «Избранное»\n• Фото, видео, GIF и файлы со сквозным шифрованием"
 }
